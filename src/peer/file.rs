@@ -6,7 +6,7 @@ pub struct RFSFile {
 }
 
 impl RFSFile {
-    pub async fn from_path(path: String) -> Self {
+    pub async fn from_path(path: &str) -> Self {
         let contents = fs::read(path).await.unwrap();
         let data: File = serde_json::from_slice(contents.as_slice()).unwrap();
         RFSFile {

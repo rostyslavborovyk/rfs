@@ -32,40 +32,44 @@ pub enum ConnectionFrame {
 
     #[serde(rename = "GetPing")]
     GetPing(GetPingFrame),
-    
+
     #[serde(rename = "PingResponse")]
-    PingResponse(PingResponseFrame)
+    PingResponse(PingResponseFrame),
 }
 
+#[derive(Debug)]
 pub struct ConnectionInfo {
-    ping: u128,
+    pub ping: u128,
     file_ids: Vec<String>,
 }
 
 
-
-// todo: refactor with state pattern https://www.youtube.com/watch?v=_ccDqRTx-JU&t=10s 
+// todo: refactor with state pattern https://www.youtube.com/watch?v=_ccDqRTx-JU&t=10s
 // define different methods for outbound peer connections and inbound connections
 pub struct Connection {
     stream: TcpStream,
     state: ConnectionState,
-    info: Option<ConnectionInfo>,
-    buffer: [u8; 1024]
+    pub info: Option<ConnectionInfo>,
+    buffer: [u8; 1024],
 }
 
 impl Connection {
-    pub async fn from_address(address: &String) -> Self {
-        let stream = TcpStream::connect(address).await.unwrap();
-        Connection{
-            stream,
-            state: ConnectionState::Connected,
-            buffer: [0; 1024],
-            info: None,
+    pub async fn from_address(address: &String) -> Option<Self> {
+        match TcpStream::connect(address).await {
+            Ok(stream) => Some(
+                Connection {
+                    stream,
+                    state: ConnectionState::Connected,
+                    buffer: [0; 1024],
+                    info: None,
+                }
+            ),
+            Err(_) => None,
         }
     }
 
     pub async fn from_stream(stream: TcpStream) -> Self {
-        Connection{
+        Connection {
             stream,
             state: ConnectionState::Connected,
             buffer: [0; 1024],
@@ -77,13 +81,13 @@ impl Connection {
         let frame_result: Result<ConnectionFrame, _> = from_slice(buffer);
         frame_result
     }
-    
+
     pub async fn read_frame(&mut self) -> Option<ConnectionFrame> {
         let n_bytes = match self.stream.read(&mut self.buffer).await {
             Ok(0) => {
                 eprintln!("No bytes received from connection, closing");
                 return None;
-            },
+            }
             Ok(n) => n,
             Err(e) => {
                 eprintln!("Failed to read from socket; err = {:?}", e);
@@ -102,20 +106,20 @@ impl Connection {
         };
         Some(frame)
     }
-    
+
     pub async fn write_frame(&mut self, frame: ConnectionFrame) {
         let data = to_vec(&frame).expect("Failed to serialize GetInfo frame!");
         self.stream.write_all(data.as_ref()).await.expect("Failed to send GetInfo frame to the peer");
     }
 
     pub async fn retrieve_info(&mut self) {
-        if let ConnectionState::Connected = self.state {
+        if self.state != ConnectionState::Connected {
             eprintln!("Failed to retrieve info, connection is not in connected state!");
             return;
         }
 
-        self.write_frame(ConnectionFrame::GetInfo(GetInfoFrame{})).await;
-        
+        self.write_frame(ConnectionFrame::GetInfo(GetInfoFrame {})).await;
+
         // todo: rewrite it to return Error to propagate it above with ? operator
         let info_response = match self.read_frame().await {
             None => {
@@ -133,7 +137,7 @@ impl Connection {
             }
         };
 
-        self.write_frame(ConnectionFrame::GetPing(GetPingFrame{})).await;
+        self.write_frame(ConnectionFrame::GetPing(GetPingFrame {})).await;
 
         let start = Instant::now();
         if let Some(ping_response) = self.read_frame().await {
@@ -145,8 +149,8 @@ impl Connection {
             eprintln!("Invalid data received!");
             return;
         };
-        let ping = Instant::now().duration_since(start).as_millis();
-        
+        let ping = Instant::now().duration_since(start).as_micros();
+
         self.state = ConnectionState::InfoRetrieved;
         self.info = Some(ConnectionInfo {
             ping,

@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use crate::peer::client::{FileManager, LocalFSInfo};
 use tokio::sync::{Mutex};
@@ -11,6 +10,12 @@ pub struct StateContainer {
     pub file_manager: FileManager,
 }
 
+
+impl Default for StateContainer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl StateContainer {
     pub fn new() -> Self {
