@@ -7,9 +7,9 @@ use distributed_fs::peer::state_container::{StateContainer};
 async fn main() {
     let sharable_state_container = Arc::new(Mutex::new(StateContainer::new()));
     
-    let mut client = Client::new(sharable_state_container.clone());
+    let mut client = Client::new("127.0.0.1:8003".to_string(), sharable_state_container.clone());
     
-    client.load_file("files/1.json").await.unwrap();
+    client.load_file("meta_files/1.json").await.unwrap();
     
     client.download_file(String::from("b2af0093-4f31-4519-8e97-0940e9973247")).await.unwrap();
     println!("Completed!")

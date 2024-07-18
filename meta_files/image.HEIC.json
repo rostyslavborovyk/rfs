@@ -1,0 +1,16 @@
+{
+  "id": "BPCry8WD6vjfy51/QYn2cb/fZsfnKIIXCFjDUsHM/wA=",
+  "name": "image.HEIC",
+  "length": 1121518,
+  "peers": [
+    "127.0.0.1:8000"
+  ],
+  "pieceSize": 262144,
+  "hashes": [
+    "2gldQF3s9nhLqj28moVLOciFbOzQnNjkTtuwjlARORI=",
+    "EvVxxriAJZRR8z0KRYr2M0z8Uo2sRCHLdl7q6k7VfGE=",
+    "i3pKO0k0Yp8M7yNs0Zu88E4VY7opkOnxm+TzBpCzdUU=",
+    "mKw98k0yD0KN/4QP/PtBX8ZggH3TjrJrP6Tp7lIZcBg=",
+    "7RAfFgMWDzH413MEJBcfCxQBkTD3rKuC25Qqcp3wsLc="
+  ]
+}

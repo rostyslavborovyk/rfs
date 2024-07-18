@@ -19,7 +19,7 @@ async fn main() {
     
     let sharable_state_container = Arc::new(Mutex::new(StateContainer::new()));
 
-    let client = Arc::new(Client::new(sharable_state_container.clone()));
+    let client = Arc::new(Client::new(args.address.clone(), sharable_state_container.clone()));
 
     serve_listener(
         args.address,

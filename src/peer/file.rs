@@ -1,6 +1,9 @@
+use serde::{Deserialize, Serialize};
 use crate::peer::models::File;
 use tokio::fs;
 
+
+#[derive(Serialize, Deserialize)]
 pub struct RFSFile {
     pub data: File
 }
@@ -12,5 +15,11 @@ impl RFSFile {
         RFSFile {
             data,
         }
+    }
+    
+    pub async fn save(&self) {
+        let path = String::from("meta_files/") + &String::from(self.data.name.clone()) + &".json";
+        let contents = serde_json::to_string(&self.data).unwrap();
+        fs::write(path, contents).await.unwrap()
     }
 }

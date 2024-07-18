@@ -3,6 +3,9 @@
 A distributed p2p file system. Unlike BitTorrent, doesn't have a tracker server that tracks all peers in the network,
 and every client in the system is equal.
 
+## Links
+
+- Torrent file format wikipedia: https://en.wikipedia.org/wiki/Torrent_file#:~:text=Torrent%20files%20are%20normally%20named,torrent%20.&text=A%20torrent%20file%20acts%20like,use%20of%20a%20BitTorrent%20client
 
 ## Taxonomy
 
