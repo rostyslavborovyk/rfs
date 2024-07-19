@@ -112,42 +112,31 @@ impl Connection {
         self.stream.write_all(data.as_ref()).await.expect("Failed to send GetInfo frame to the peer");
     }
 
-    pub async fn retrieve_info(&mut self) {
+    pub async fn retrieve_info(&mut self) -> Result<(), String> {
         if self.state != ConnectionState::Connected {
-            eprintln!("Failed to retrieve info, connection is not in connected state!");
-            return;
+            return Err("Failed to retrieve info, connection is not in connected state!".to_string());
         }
 
         self.write_frame(ConnectionFrame::GetInfo(GetInfoFrame {})).await;
 
-        // todo: rewrite it to return Error to propagate it above with ? operator
-        let info_response = match self.read_frame().await {
-            None => {
-                eprintln!("Invalid data received!");
-                return;
-            }
-            Some(info_response) => {
-                match info_response {
-                    ConnectionFrame::InfoResponse(frame) => frame,
-                    _ => {
-                        eprintln!("Wrong frame received!");
-                        return;
-                    }
-                }
+        let info_response = match self.read_frame().await.ok_or("Invalid data received!")? {
+            ConnectionFrame::InfoResponse(frame) => frame,
+            _ => {
+                return Err("Wrong frame received!".to_string());
             }
         };
 
         self.write_frame(ConnectionFrame::GetPing(GetPingFrame {})).await;
 
         let start = Instant::now();
-        if let Some(ping_response) = self.read_frame().await {
-            if let ConnectionFrame::PingResponse(_) = ping_response {} else {
-                eprintln!("Wrong frame received!");
-                return;
+        match self.read_frame().await {
+            Some(ConnectionFrame::PingResponse(_)) => {},
+            Some(_) => {
+                return Err("Wrong frame received!".to_string());
+            },
+            None => {
+                return Err("Invalid data received!".to_string());
             }
-        } else {
-            eprintln!("Invalid data received!");
-            return;
         };
         let ping = Instant::now().duration_since(start).as_micros();
 
@@ -155,6 +144,7 @@ impl Connection {
         self.info = Some(ConnectionInfo {
             ping,
             file_ids: info_response.file_ids,
-        })
+        });
+        Ok(())
     }
 }

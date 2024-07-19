@@ -18,7 +18,7 @@ impl RFSFile {
     }
     
     pub async fn save(&self) {
-        let path = String::from("meta_files/") + &String::from(self.data.name.clone()) + &".json";
+        let path = String::from("meta_files/") + &self.data.name.clone() + ".json";
         let contents = serde_json::to_string(&self.data).unwrap();
         fs::write(path, contents).await.unwrap()
     }

@@ -8,6 +8,6 @@ pub struct File {
     pub name: String,
     pub length: u64,
     pub peers: Vec<String>,
-    pub pieceSize: u64,
+    pub piece_size: u64,
     pub hashes: Vec<String>,
 }

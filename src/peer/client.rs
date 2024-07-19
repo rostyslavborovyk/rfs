@@ -26,9 +26,9 @@ pub struct FileManager {
 
 impl FileManager {
     pub async fn generate_meta_file(&self, host_address: String, path: &str) -> Result<RFSFile, String> {
-        let name = path.split("/").into_iter().last().ok_or("Unable to get name from path!")?.to_owned();    
+        let name = path.split('/').last().ok_or("Unable to get name from path!")?.to_owned();    
         let contents = tokio::fs::read(path).await
-            .or_else(|err| Err(format!("Error when reading file {err}")))?;
+            .map_err(|err| format!("Error when reading file {err}"))?;
 
         let length = contents.len() as u64;
         let mut hasher = Sha256::new();
@@ -37,17 +37,16 @@ impl FileManager {
         let file_id = general_purpose::STANDARD.encode(hasher.finalize());
 
         let hashes: Vec<String> = (0..f64::ceil(contents.len() as f64 / DEFAULT_PIECE_SIZE as f64) as usize)
-            .into_iter().map(|i| {
+            .map(|i| {
                 let start = i*DEFAULT_PIECE_SIZE as usize;
                 let end = (i + 1)*DEFAULT_PIECE_SIZE as usize;
-                let piece: &[u8];
-                if end < contents.len() {
-                    piece = &contents[start..end];
+                let piece = if end < contents.len() {
+                    &contents[start..end]
                 } else {
-                    piece = &contents[start..];
-                }
+                    &contents[start..]
+                };
                 let mut hasher = Sha256::new();
-                hasher.update(&piece);
+                hasher.update(piece);
                 general_purpose::STANDARD.encode(hasher.finalize())
                 }
             ).collect();
@@ -59,7 +58,7 @@ impl FileManager {
                     name,
                     length,
                     peers: vec![host_address],
-                    pieceSize: DEFAULT_PIECE_SIZE,
+                    piece_size: DEFAULT_PIECE_SIZE,
                     hashes,
                 }
             })
@@ -100,13 +99,8 @@ impl FileManager {
         self.files.insert(file_id, file_);
     }
 
-    pub async fn download_file(&self, file_id: String) {
-        let file = match self.files.get(&file_id) {
-            None => {
-                return;
-            }
-            Some(v) => v
-        };
+    pub async fn download_file(&self, file_id: String) -> Result<(), String> {
+        let file = self.files.get(&file_id).ok_or("No file with such name")?;
 
         let peers = file.file.data.peers.clone();
 
@@ -120,15 +114,14 @@ impl FileManager {
             }
         })).await;
 
-        let connections = connections.into_iter().flatten().collect::<Vec<Connection>>();
-
-        let connections = join_all(connections.into_iter().map(|mut c| async {
-            c.retrieve_info().await;
-            println!("Connection info: {:?}", c.info);
+        let connections = join_all(connections.into_iter().flatten().map(|mut c| async {
+            if let Err(e) = c.retrieve_info().await {
+                println!("Error when retrieving connection info: {:?}", e);
+            };
             c
         })).await;
 
-        let pings = connections.iter().map(move |c| {
+        let pings = connections.iter().map(|c| {
             match &c.info {
                 None => {
                     u128::MAX
@@ -144,12 +137,12 @@ impl FileManager {
 
         println!("N pieces {:?}", file.file.data.hashes.len() as i64);
         println!("Pieces ratios for download {:?}", pieces_ratios);
-
         // download file pieces
 
         // check pieces hashes
 
         // assemble pieces into a file 
+        Ok(())
     }
 }
 
@@ -186,7 +179,7 @@ impl Client {
 
     pub async fn download_file(&mut self, file_id: String) -> Result<(), Box<dyn Error>> {
         let locked_state_container = self.state_container.lock().await;
-        locked_state_container.file_manager.download_file(file_id).await;
+        locked_state_container.file_manager.download_file(file_id).await?;
         Ok(())
     }
 }
