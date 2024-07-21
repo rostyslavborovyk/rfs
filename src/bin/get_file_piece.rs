@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use distributed_fs::peer::client::Client;
-use distributed_fs::peer::connection::{Connection, ConnectionFrame, GetFilePieceFrame, GetInfoFrame};
+use distributed_fs::peer::connection::{Connection, ConnectionFrame, GetFilePieceFrame};
 use distributed_fs::peer::state_container::StateContainer;
 
 

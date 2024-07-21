@@ -30,7 +30,9 @@ pub struct FileManager {
 
 impl FileManager {
     pub async fn generate_meta_file(&self, host_address: String, path: &str) -> Result<RFSFile, String> {
-        let name = path.split('/').last().ok_or("Unable to get name from path!")?.to_owned();
+        let name = path
+            .split('/').last().ok_or("Unable to get name from path!")?
+            .to_owned();
         let contents = tokio::fs::read(path).await
             .map_err(|err| format!("Error when reading file {err}"))?;
 
@@ -233,10 +235,10 @@ impl Client {
         }
     }
 
-    pub async fn generate_meta_file(&self, path: &str) -> Result<(), Box<dyn Error>> {
+    pub async fn generate_meta_file(&self, path: &str) -> Result<(), String> {
         let locked_state_container = self.state_container.lock().await;
         let rfs_file = locked_state_container.file_manager.generate_meta_file(self.address.clone(), path).await?;
-        rfs_file.save().await;
+        rfs_file.save().await?;
         Ok(())
     }
 

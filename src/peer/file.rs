@@ -16,13 +16,17 @@ impl RFSFile {
             data,
         }
     }
-    
-    pub async fn save(&self) {
-        let path = String::from("meta_files/") + &self.data.name.clone() + ".json";
+
+    pub async fn save(&self) -> Result<(), String>{
+        let path = String::from("meta_files/") 
+            + &self.data.name.split('.').next()
+            .ok_or("Failed to parse the file name, should be in format {name}.{extension}!")? 
+            + ".rfs";
         let contents = serde_json::to_string(&self.data).unwrap();
-        fs::write(path, contents).await.unwrap()
+        fs::write(path, contents).await.unwrap();
+        Ok(())
     }
-    
+
     pub fn get_path(&self) -> String {
         "files/".to_string() + &self.data.name
     }

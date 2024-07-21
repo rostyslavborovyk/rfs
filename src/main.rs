@@ -13,7 +13,7 @@ async fn main() {
     client.load_file("meta_files/image.HEIC.json").await.unwrap();
     
     let start = Instant::now();
-    client.download_file(String::from("a8f106a9-0066-4946-b691-49721c94d615")).await.unwrap();
+    client.download_file(String::from("0155d08b-609b-45fa-804d-53456c2a863d")).await.unwrap();
     println!("Time elapsed: {}ms", start.elapsed().as_millis())
 
     // tokio::spawn(async move {

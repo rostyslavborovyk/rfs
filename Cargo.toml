@@ -18,3 +18,7 @@ serde_cbor = "0.11.2"
 [[bin]]
 name = "serve_peer"
 path = "src/bin/serve_peer.rs"
+
+[[bin]]
+name = "generate_meta_file"
+path = "src/bin/generate_meta_file.rs"

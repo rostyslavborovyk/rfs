@@ -1,6 +1,7 @@
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
-use serde_json::{from_slice, to_vec};
+// todo: cbor serialization still produces 31Kb size for the frame with 16Kb of contents. Maybe check some other available formats
+use serde_cbor::{from_slice, to_vec};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::{Instant, sleep};
@@ -105,10 +106,6 @@ impl Connection {
         }
     }
 
-    fn get_frame(&self, buffer: &[u8]) -> Result<ConnectionFrame, String> {
-        from_slice(buffer).map_err(|err| format!("Error when parsing frame {err}"))?
-    }
-
     // todo: connection may return more bytes than buffer can load. To rewrite it with an ability
     // for the buffer to store loaded bytes and read from stream again.
     pub async fn read_frame(&mut self) -> Result<ConnectionFrame, String> {
@@ -122,9 +119,7 @@ impl Connection {
             }
         }?;
 
-        let bytes = &self.buffer[..n_bytes];
-
-        self.get_frame(bytes)
+        from_slice(&self.buffer[..n_bytes]).map_err(|err| format!("Error when parsing frame {err}"))
     }
 
     pub async fn write_frame(&mut self, frame: ConnectionFrame) {
@@ -188,6 +183,5 @@ impl Connection {
                 return Ok(r)
             }
         }
-
     }
 }

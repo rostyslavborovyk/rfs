@@ -13,11 +13,12 @@ async fn main() {
 
     // setting up the peer
     let peer_address = "127.0.0.1:8001".to_string();
+    let host_address = "127.0.0.1:8003".to_string();
 
     let peer_sharable_state_container = Arc::new(Mutex::new(StateContainer::new()));
 
     let mut peer_client = Client::new(peer_address.clone(), peer_sharable_state_container.clone());
-    peer_client.load_file("meta_files/image.HEIC.json").await.unwrap();
+    peer_client.load_file("meta_files/image.rfs").await.unwrap();
 
     tokio::spawn(async move {
         serve_listener(
@@ -29,13 +30,11 @@ async fn main() {
     // setting up the client
     let sharable_state_container = Arc::new(Mutex::new(StateContainer::new()));
 
-    let mut client = Client::new("127.0.0.1:8003".to_string(), sharable_state_container.clone());
+    let mut client = Client::new(host_address, sharable_state_container.clone());
+    client.load_file("meta_files/image.rfs").await.unwrap();
+    client.download_file(String::from("0155d08b-609b-45fa-804d-53456c2a863d")).await.unwrap();
 
-    client.load_file("meta_files/image.HEIC.json").await.unwrap();
-
-    client.download_file(String::from("a8f106a9-0066-4946-b691-49721c94d615")).await.unwrap();
-
-    let mut resulting_file = OpenOptions::new()
+    let resulting_file = OpenOptions::new()
         .write(true)
         .create(true)
         .open("files/new-image.HEIC")
