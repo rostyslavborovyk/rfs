@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use base64::Engine;
 use base64::engine::general_purpose;
-use crate::peer::connection::{Connection};
+use crate::peer::connection::{Connection, FilePieceResponseFrame};
 use crate::peer::enums::FileManagerFileStatus;
 use crate::peer::file::RFSFile;
 use crate::utils::get_now;
@@ -10,6 +10,10 @@ use futures::future::join_all;
 use crate::peer::models::File;
 use crate::peer::state_container::{SharableStateContainer};
 use sha2::{Sha256, Digest};
+use tokio::fs;
+use tokio::fs::OpenOptions;
+use tokio::io::AsyncWriteExt;
+use uuid::Uuid;
 use crate::values::DEFAULT_PIECE_SIZE;
 
 pub struct LocalFSInfo {}
@@ -26,7 +30,7 @@ pub struct FileManager {
 
 impl FileManager {
     pub async fn generate_meta_file(&self, host_address: String, path: &str) -> Result<RFSFile, String> {
-        let name = path.split('/').last().ok_or("Unable to get name from path!")?.to_owned();    
+        let name = path.split('/').last().ok_or("Unable to get name from path!")?.to_owned();
         let contents = tokio::fs::read(path).await
             .map_err(|err| format!("Error when reading file {err}"))?;
 
@@ -34,7 +38,8 @@ impl FileManager {
         let mut hasher = Sha256::new();
         hasher.update(&contents);
 
-        let file_id = general_purpose::STANDARD.encode(hasher.finalize());
+        let file_id = Uuid::new_v4().to_string();
+        let hash = general_purpose::STANDARD.encode(hasher.finalize());
 
         let hashes: Vec<String> = (0..f64::ceil(contents.len() as f64 / DEFAULT_PIECE_SIZE as f64) as usize)
             .map(|i| {
@@ -55,6 +60,7 @@ impl FileManager {
             RFSFile {
                 data: File {
                     id: file_id,
+                    hash,
                     name,
                     length,
                     peers: vec![host_address],
@@ -62,6 +68,25 @@ impl FileManager {
                     hashes,
                 }
             })
+    }
+
+    pub async fn get_file_piece(&mut self, file_id: String, piece: u64) -> Result<Vec<u8>, String> {
+        let file = self.files.get(&file_id).ok_or(format!("File not found by id {:?}", file_id))?;
+
+        // todo: rewrite to read only piece from the fs
+        let contents = tokio::fs::read(file.file.get_path()).await
+            .map_err(|err| format!("Error when reading file {err}"))?;
+
+        let start = (file.file.data.piece_size * piece) as usize;
+        let end = (file.file.data.piece_size * (piece + 1)) as usize;
+
+        let piece = if end < contents.len() {
+            &contents[start..end]
+        } else {
+            &contents[start..]
+        };
+
+        Ok(piece.to_vec())
     }
 }
 
@@ -78,13 +103,27 @@ impl FileManager {
         }
     }
 
-    fn calculate_pieces_ratio(&self, n_pieces: i64, pings: Vec<u128>) -> Vec<i64> {
+    fn calculate_pieces_ratio(&self, n_pieces: i64, pings: Vec<u128>) -> Vec<u64> {
         let values = pings.into_iter().map(|p| 1f64 / (p as f64)).collect::<Vec<f64>>();
         let sum = values.iter().sum::<f64>();
-        let res = values.into_iter().map(|p| ((p / sum) * n_pieces as f64).round() as i64).collect::<Vec<i64>>();
-        if res.iter().sum::<i64>() != n_pieces {
+        let res = values.into_iter().map(|p| ((p / sum) * n_pieces as f64).round() as u64).collect::<Vec<u64>>();
+        if res.iter().sum::<u64>() != n_pieces as u64 {
             panic!("Pieces ratio doesn't add up: n_pieces = {n_pieces}, res={:?}", res)
         }
+        res
+    }
+
+    fn assign_pieces(&self, pieces_ratio: Vec<u64>) -> Vec<Vec<u64>> {
+        let mut i = 0;
+        let mut res = vec![];
+        for r in pieces_ratio {
+            let mut connection_pieces = vec![];
+            for _ in 0..r {
+                connection_pieces.push(i);
+                i += 1;
+            }
+            res.push(connection_pieces);
+        };
         res
     }
 
@@ -97,6 +136,35 @@ impl FileManager {
             status: FileManagerFileStatus::NotDownloaded,
         };
         self.files.insert(file_id, file_);
+    }
+
+    async fn save_file_piece(&self, frame: FilePieceResponseFrame) -> Result<(), String> {
+        let path = "file_pieces/".to_string() + &frame.get_piece_id();
+        fs::write(path, frame.content).await.map_err(|err| format!("Error when writing file piece {err}"))?;
+        Ok(())
+    }
+
+    async fn assemble_file(&self, file_name: String, piece_ids: Vec<String>) -> Result<(), String> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open("files/new-".to_string() + &file_name)
+            .await
+            .map_err(|err| format!("Error when opening a file {err}"))?;
+
+        for pid in piece_ids {
+            let path = "file_pieces/".to_string() + &pid;
+            let contents = tokio::fs::read(&path).await
+                .map_err(|err| format!("Error when reading a file piece {err}"))?;
+            file.write(&contents)  // or to use write_all?
+                .await
+                .map_err(|err| format!("Error when writing a file piece {err}"))?;
+            tokio::fs::remove_file(path).await
+                .map_err(|err| format!("Error when removing a file piece {err}"))?;
+        };
+
+        file.flush().await.map_err(|err| format!("Error when flushing a file{err}"))?;
+        Ok(())
     }
 
     pub async fn download_file(&self, file_id: String) -> Result<(), String> {
@@ -135,13 +203,19 @@ impl FileManager {
             pings,
         );
 
-        println!("N pieces {:?}", file.file.data.hashes.len() as i64);
-        println!("Pieces ratios for download {:?}", pieces_ratios);
-        // download file pieces
+        let assigned_pieces = self.assign_pieces(pieces_ratios);
 
-        // check pieces hashes
+        let mut piece_ids = vec![];
+        for (pieces, mut c) in assigned_pieces.iter().zip(connections) {
+            for piece in pieces {
+                let frame = c.get_file_piece(file_id.clone(), piece.to_owned()).await?;
+                // todo: check piece hash before saving
+                piece_ids.push(frame.get_piece_id());
+                self.save_file_piece(frame).await?;
+            }
+        };
 
-        // assemble pieces into a file 
+        self.assemble_file(file.file.data.name.clone(), piece_ids).await?;
         Ok(())
     }
 }
@@ -157,10 +231,6 @@ impl Client {
             address,
             state_container,
         }
-    }
-
-    async fn process(&mut self) {
-        println!("Processed!")
     }
 
     pub async fn generate_meta_file(&self, path: &str) -> Result<(), Box<dyn Error>> {
@@ -182,8 +252,4 @@ impl Client {
         locked_state_container.file_manager.download_file(file_id).await?;
         Ok(())
     }
-}
-
-pub fn hello() {
-    println!("Hello");
 }

@@ -1,7 +1,7 @@
 # Distributed file system
 
 A distributed p2p file system. Unlike BitTorrent, doesn't have a tracker server that tracks all peers in the network,
-and every client in the system is equal.
+so every client in the system is equal.
 
 ## Links
 
@@ -30,3 +30,16 @@ Business logic component will handle all the logic described in taxonomy.
 UI will be built with one of the libraries (possibly https://www.egui.rs/). It should have 2 views. The first view
 represent the state of the system (represent the peers and possibly the ping values for them, some other info about the 
 peers). The second view should represent the view of downloaded files (akin to µtorrent)
+
+
+## To do
+- Change protocol from json to binary
+- Create a context diagram for the project
+- Create a class diagram for the project
+- Create a http server that is able to accepts commands (i.e download file, get info, etc.) for the future UI integration
+
+## In progress
+- Refactor other todos, improve project structure
+
+## Completed
+- Write integration tests

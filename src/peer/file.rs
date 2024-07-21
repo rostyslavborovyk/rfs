@@ -22,4 +22,8 @@ impl RFSFile {
         let contents = serde_json::to_string(&self.data).unwrap();
         fs::write(path, contents).await.unwrap()
     }
+    
+    pub fn get_path(&self) -> String {
+        "files/".to_string() + &self.data.name
+    }
 }
