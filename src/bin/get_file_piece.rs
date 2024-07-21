@@ -11,7 +11,7 @@ async fn main() {
 
     let mut client = Client::new("127.0.0.1:8000".to_string(), sharable_state_container.clone());
 
-    client.load_file("meta_files/image.HEIC.json").await.unwrap();
+    client.load_metafiles().await.unwrap();
 
     let file_id = "BPCry8WD6vjfy51/QYn2cb/fZsfnKIIXCFjDUsHM/wA=".to_string();
     let piece = 0;

@@ -242,14 +242,21 @@ impl Client {
         Ok(())
     }
 
-    pub async fn load_file(&mut self, path: &str) -> Result<(), Box<dyn Error>> {
-        let file = RFSFile::from_path(path).await;
+    pub async fn load_metafiles(&mut self) -> Result<(), String> {
         let mut locked_state_container = self.state_container.lock().await;
-        locked_state_container.file_manager.add_file(file);
+        let mut entries = fs::read_dir("meta_files/").await.unwrap();
+        while let Some(entry) = entries.next_entry().await.map_err(|_| "Failed to read entry")? {
+            let path = entry.path();
+            let path = path.to_str().unwrap();
+            if path.split('.').last() == Some("rfs") {
+                let file = RFSFile::from_path(path).await;
+                locked_state_container.file_manager.add_file(file);
+            }
+        }
         Ok(())
     }
 
-    pub async fn download_file(&mut self, file_id: String) -> Result<(), Box<dyn Error>> {
+    pub async fn download_file(&mut self, file_id: String) -> Result<(), String> {
         let locked_state_container = self.state_container.lock().await;
         locked_state_container.file_manager.download_file(file_id).await?;
         Ok(())

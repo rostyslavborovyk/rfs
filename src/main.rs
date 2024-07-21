@@ -9,17 +9,10 @@ async fn main() {
     let sharable_state_container = Arc::new(Mutex::new(StateContainer::new()));
     
     let mut client = Client::new("127.0.0.1:8003".to_string(), sharable_state_container.clone());
-    
-    client.load_file("meta_files/image.HEIC.json").await.unwrap();
+
+    client.load_metafiles().await.unwrap();
     
     let start = Instant::now();
     client.download_file(String::from("0155d08b-609b-45fa-804d-53456c2a863d")).await.unwrap();
     println!("Time elapsed: {}ms", start.elapsed().as_millis())
-
-    // tokio::spawn(async move {
-    //     serve_listener(
-    //         String::from("127.0.0.1:8001"),
-    //         &mut sharable_state_container.clone(),
-    //     ).await;
-    // });
 }

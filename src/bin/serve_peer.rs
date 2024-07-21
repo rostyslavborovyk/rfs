@@ -20,7 +20,8 @@ async fn main() {
     let sharable_state_container = Arc::new(Mutex::new(StateContainer::new()));
 
     let mut client = Client::new(args.address.clone(), sharable_state_container.clone());
-    client.load_file("meta_files/image.HEIC.json").await.unwrap();
+    
+    client.load_metafiles().await.unwrap();
 
     serve_listener(
         args.address,
