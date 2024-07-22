@@ -6,6 +6,7 @@ so every client in the system is equal.
 ## Links
 
 - Torrent file format wikipedia: https://en.wikipedia.org/wiki/Torrent_file#:~:text=Torrent%20files%20are%20normally%20named,torrent%20.&text=A%20torrent%20file%20acts%20like,use%20of%20a%20BitTorrent%20client
+- Torrent terms: https://en.wikipedia.org/wiki/Glossary_of_BitTorrent_terms#:~:text=A%20seed%20refers%20to%20a,other%20peers%20to%20download%20from.
 
 ## Taxonomy
 
@@ -32,8 +33,11 @@ represent the state of the system (represent the peers and possibly the ping val
 peers). The second view should represent the view of downloaded files (akin to Âµtorrent)
 
 
+## Requirements
+
+1. Loading metadata file from memory 
+
 ## To do
-- Change protocol from json to binary
 - Create a context diagram for the project
 - Create a class diagram for the project
 - Create a http server that is able to accepts commands (i.e download file, get info, etc.) for the future UI integration
@@ -43,3 +47,8 @@ peers). The second view should represent the view of downloaded files (akin to Â
 
 ## Completed
 - Write integration tests
+- Change protocol from json to binary
+
+## UI
+1. Represent a list of metafiles present in the system with some info (name, size, downloaded or not, etc.)
+2. Each of the file items can be opened and the info about available peers(seeds) is shown to the users with some refresh interval

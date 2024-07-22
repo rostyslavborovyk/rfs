@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::error::Error;
 use base64::Engine;
 use base64::engine::general_purpose;
 use crate::peer::connection::{Connection, FilePieceResponseFrame};
@@ -237,7 +236,8 @@ impl Client {
 
     pub async fn generate_meta_file(&self, path: &str) -> Result<(), String> {
         let locked_state_container = self.state_container.lock().await;
-        let rfs_file = locked_state_container.file_manager.generate_meta_file(self.address.clone(), path).await?;
+        let rfs_file = locked_state_container.file_manager
+            .generate_meta_file(self.address.clone(), path).await?;
         rfs_file.save().await?;
         Ok(())
     }
