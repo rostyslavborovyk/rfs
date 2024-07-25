@@ -1,7 +1,7 @@
 pub mod client;
 pub mod connection;
-mod models;
-mod file;
-mod enums;
+pub mod models;
+pub mod file;
+pub mod enums;
 pub mod state_container;
 pub mod listener;

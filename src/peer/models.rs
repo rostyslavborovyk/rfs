@@ -1,14 +1,14 @@
 use serde::{Serialize, Deserialize};
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct File {
     pub id: String,
     pub hash: String,
     pub name: String,
     pub length: u64,
-    pub peers: Vec<String>,
+    pub peers: Vec<String>,  // rename to seeds
     pub piece_size: u64,
     pub hashes: Vec<String>,
 }

@@ -41,6 +41,7 @@ peers). The second view should represent the view of downloaded files (akin to Â
 - Create a context diagram for the project
 - Create a class diagram for the project
 - Create a http server that is able to accepts commands (i.e download file, get info, etc.) for the future UI integration
+- Watch https://www.youtube.com/watch?v=NtUkr_z7l84
 
 ## In progress
 - Refactor other todos, improve project structure
@@ -52,3 +53,7 @@ peers). The second view should represent the view of downloaded files (akin to Â
 ## UI
 1. Represent a list of metafiles present in the system with some info (name, size, downloaded or not, etc.)
 2. Each of the file items can be opened and the info about available peers(seeds) is shown to the users with some refresh interval
+
+### UI Wireframe
+https://excalidraw.com/#json=qQRuctZkgNcJfE6hOZb3a,qpcrJ17YkC2SLbDHhUGqEQ
+

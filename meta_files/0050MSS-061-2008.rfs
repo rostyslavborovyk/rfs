@@ -1,0 +1,37 @@
+{
+  "id": "ab4a916c-f6b2-4814-b056-d364d4019098",
+  "hash": "KQiVeimNcnuJSwZOVOw1EmyD5h96ORTX2990ayA09yg=",
+  "name": "0050MSS-061-2008.pdf",
+  "length": 395109,
+  "peers": [
+    "127.0.0.1:8000"
+  ],
+  "pieceSize": 16384,
+  "hashes": [
+    "etIaCXf7FOPQLY+Q1wv6V1n3Y/z1iEdvGDpy7DWtQnI=",
+    "1jOtGTfZSyw/wrJgDIlLwG1+F96khAvHu8nA7fUjYDA=",
+    "+dI2TqJaQk/KWkOt8vg3fmTUmM/IXLX8FtuwDVjfaLU=",
+    "rE6mBNOPhT6zMqOLARUFNyhSfly0MQRg1M2QTgn5ujk=",
+    "UnRQ8rDYegvXOok/vca8fvqd+423XkCTlP2U1X04h2E=",
+    "2CqPzlLIC7SZliHPipmbd94rsgIyGqKQqAm4UEVLx+Q=",
+    "lpacsvcnNbGzzsICeJMlj9ehs03S6BjzhYFFaP8k4Ao=",
+    "Rv9zT8I2gbuzox+WaNt10gY3mxxzQV47K0t8aDFRq5w=",
+    "LSX+HeeEx+G3IpaHVh66MP5n3Uw7NW5WAAF64xDAguU=",
+    "MWJqZ8LIwVXLIiorfOR+YRWtmoOxy25OJZzymox60rI=",
+    "bZxZWhQ7dQcS9CttRbDi6bDy3k+30QgfAinHrVVuWmw=",
+    "h53p8tbDHpWVmD0LvRcUiiPnz/+Ut7h2RUvuysAtuhs=",
+    "QYd7Xtzb0Qr7i+RW7vvQk8o3lasFLFZzV/hJQZ4jToI=",
+    "occ64iJrF+GqlFqphSE+W+2Ojh+fXta27AOx1lqZNYs=",
+    "o0NxDFA5zJTsQ7tp8bl6haXu/8gpyx9GF0aA07se07g=",
+    "wTup0yq9jBDLsrJtiorRNvFFfQTj5kVRwENe0eQiX7Y=",
+    "whYmCFxsx1QPfbj6gF3nivJmBgU7X3RjfYgE0xUemgY=",
+    "F3PkBUr+UC9JcQ6GwvVH7yYu3clNtScnWmg4ZWB2HrA=",
+    "suPkOkT2AcMqH4mf7VzaEgkzHvhD0s16DrMET8uLyVo=",
+    "HYlRH4Cdu6b7qgsM40UNuAxnqEvidK85krCew3tS3hg=",
+    "WtyYz2/kI26axcgrfoklyuDFQ9Gx7A6zt4k53/ZNVwo=",
+    "mrArNZG3+UUAV4AVW6k2Wxn63xvXVt6xeM7HG+YnWno=",
+    "xAGYksBd2mETb0MsuzEao7nOwrdOsGU11/kxCiM+hoo=",
+    "pYUzFshSwqdqFRaW532dJen345Vvh7odFXFop9wOYvU=",
+    "QszMWrjDp5ZqxDuDW1D3Am7GTMZQRhdXazrqQR6ufb4="
+  ]
+}
