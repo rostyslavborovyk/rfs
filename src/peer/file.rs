@@ -4,7 +4,7 @@ use crate::peer::models::File;
 use tokio;
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RFSFile {
     pub data: File
 }
