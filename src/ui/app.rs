@@ -7,10 +7,11 @@ use eframe::egui;
 use eframe::egui::Color32;
 use eframe::emath::{Align};
 use tinyfiledialogs as tfd;
+use crate::domain::files::generate_meta_file;
 use crate::peer::file::RFSFile;
-use crate::peer::state_container::KnownPeer;
-use crate::ui::cilent::get_info;
-use crate::values::RECALCULATE_PINGS_DELAY_SECS;
+use crate::peer::state::KnownPeer;
+use crate::ui::client::get_info;
+use crate::values::{LOCAL_PEER_ADDRESS, RECALCULATE_PINGS_DELAY_SECS};
 
 const ACCENT: Color32 = Color32::from_rgb(200, 255, 200);
 
@@ -23,11 +24,15 @@ pub struct AppState {
 
 #[derive(Default)]
 pub struct AppConfig {
+    local_peer_address: String,
     home_dir: String,
+    rfs_dir: String,
     metafiles_dir: String,
+    file_parts_dir: String,
 }
 
 pub struct AppChannels {
+    // todo: change to the channel with capacity 1 to avoid memory leaks?
     sync_rx: Receiver<SyncChannelEvent>,
 }
 
@@ -48,8 +53,11 @@ impl RFSApp {
         let mut config: AppConfig = Default::default();
         let mut state: AppState = Default::default();
 
+        config.local_peer_address = LOCAL_PEER_ADDRESS.to_string();
         config.home_dir = std::env::var("HOME").unwrap_or_else(|_| "".to_string());
-        config.metafiles_dir = config.home_dir.clone() + "/.rfs_metafiles";
+        config.rfs_dir = config.home_dir.clone() + "/.rfs";
+        config.metafiles_dir = config.rfs_dir.clone() + "/metafiles";
+        config.file_parts_dir = config.rfs_dir.clone() + "/file_parts";
         state.rfs_files = fs::read_dir(&config.metafiles_dir).unwrap().into_iter().map(|path| {
             let p = path.unwrap().path().to_str().unwrap().to_owned();
             RFSFile::from_path_sync(&p)
@@ -60,8 +68,6 @@ impl RFSApp {
                 println!("Metafiles dir was not found and unable to create it! {err}")
             };
         };
-
-        println!("Loaded rfs files {:#?}", &state.rfs_files);
 
         // todo: change to oneshot channel
         let (sync_tx, sync_rx) = channel();
@@ -90,6 +96,7 @@ impl eframe::App for RFSApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.render_file_panel(ctx);
         self.render_info_panel(ctx);
+        self.render_button_panel(ctx);
         render_footer(ctx);
         self.listen_channels(ctx);
     }
@@ -102,15 +109,23 @@ impl RFSApp {
                 for file in self.state.rfs_files.iter() {
                     self.render_file(ui, file);
                 }
-                ui.with_layout(egui::Layout::bottom_up(Align::Center), |ui| {
-                    // todo add filter parameter to open_file_dialog
-                    if ui.add_sized([ui.available_width(), 0.0], egui::Button::new("Add .rfs file")).clicked() {
-                        if let Some(path) = tfd::open_file_dialog("Select .rfs file", &self.config.home_dir, None) {
-                            self.add_file(path);
-                        }
+            });
+        });
+    }
+    fn render_button_panel(&mut self, ctx: &egui::Context) {
+        egui::SidePanel::right("right_panel").exact_width(100.).resizable(false).show(ctx, |ui| {
+            ui.with_layout(egui::Layout::top_down(Align::Center), |ui| {
+                if ui.add_sized([100., 0.0], egui::Button::new("Add .rfs file")).clicked() {
+                    if let Some(path) = tfd::open_file_dialog("Select .rfs file", &self.config.home_dir, Some((&["*.rfs"], ""))) {
+                        self.add_rfs_file(path);
                     }
-                    ui.add_space(5.);
-                });
+                }
+                if ui.add_sized([100., 0.0], egui::Button::new("Generate .rfs file")).clicked() {
+                    if let Some(path) = tfd::open_file_dialog("Select a file to generate .rfs file", &self.config.home_dir, None) {
+                        self.generate_rfs_file(path);
+                    }
+                }
+                ui.add_space(5.);
             });
         });
     }
@@ -170,18 +185,17 @@ impl RFSApp {
         });
     }
 
-
     fn render_info_panel_field(&mut self, ui: &mut egui::Ui, name: &str, value: &str, space: f32) {
         ui.horizontal(|ui| {
             ui.add_space(space);
             ui.label(name);
-            ui.with_layout(egui::Layout::right_to_left(Align::TOP), |ui| {
+            ui.with_layout(egui::Layout::left_to_right(Align::TOP), |ui| {
                 ui.label(format!("{}", value));
             });
         });
     }
 
-    fn add_file(&mut self, path: String) {
+    fn add_rfs_file(&mut self, path: String) {
         let path = path.clone();
         let file_name = path.split('/').last().unwrap();
         let destination = self.config.metafiles_dir.clone() + &"/" + file_name;
@@ -192,23 +206,43 @@ impl RFSApp {
         self.state.rfs_files.push(RFSFile::from_path_sync(&destination));
     }
 
+    fn generate_rfs_file(&mut self, path: String) -> Result<(), String> {
+        let path = path.clone();
+        let meta_file_path = self.config.metafiles_dir.clone()
+            + "/"
+            + path.split('/').last().unwrap().split('.').next()
+            .ok_or("Failed to parse the file name, should be in format {name}.{extension}!")?
+            + ".rfs";
+        if let Ok(rfs_file) = generate_meta_file(self.config.local_peer_address.clone(), &path) {
+            rfs_file.save(meta_file_path.clone())?;
+        };
+        self.state.rfs_files.push(RFSFile::from_path_sync(&meta_file_path));
+        Ok(())
+    }
+
     fn render_file(&self, ui: &mut egui::Ui, file: &RFSFile) {
         ui.horizontal(|ui| {
-            ui.add_sized([ui.available_width() * 0.5, 0.0], egui::Label::new(format!("{}", file.data.name)));
-            ui.add_sized([ui.available_width() * 0.7, 0.0], egui::Label::new(format!("{}", file.data.length)));
-            let btn = ui.add_sized([ui.available_width(), 0.0], {
-                let btn = egui::Button::new("⏵");
-                if let Some(file_id) = &self.state.file_id_selected.borrow().deref() {
-                    if file_id.eq(&file.data.id) {
-                        btn.fill(ACCENT)
+            ui.label(format!("{}", file.data.name));
+            ui.with_layout(egui::Layout::left_to_right(Align::TOP), |ui| {
+                ui.label(format!("{}", file.data.length));
+            });
+
+            let btn = ui.with_layout(egui::Layout::right_to_left(Align::TOP), |ui| {
+                ui.add_sized([30., 0.0], {
+                    let btn = egui::Button::new("⏵");
+                    if let Some(file_id) = &self.state.file_id_selected.borrow().deref() {
+                        if file_id.eq(&file.data.id) {
+                            btn.fill(ACCENT)
+                        } else {
+                            btn
+                        }
                     } else {
                         btn
                     }
-                } else {
-                    btn
-                }
+                })
             });
-            if btn.clicked() {
+            
+            if btn.inner.clicked() {
                 self.state.file_id_selected.replace(Some(file.data.id.clone()));
             }
         });

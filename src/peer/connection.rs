@@ -6,7 +6,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::{Instant, sleep};
 use crate::peer::enums::ConnectionState;
-use crate::peer::state_container::KnownPeer;
+use crate::peer::state::KnownPeer;
 use crate::values::DEFAULT_BUFFER_SIZE;
 
 #[derive(Serialize, Deserialize, Debug)]

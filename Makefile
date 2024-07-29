@@ -12,3 +12,6 @@ setup_1:
 	cargo run --bin serve_peer -- --address 127.0.0.1:8000 & \
 	cargo run --bin serve_peer -- --address 127.0.0.1:8001 & \
 	cargo run --bin run_ui
+
+kill_setup_1:
+	kill $(ps -a | grep serve_peer | awk '{print $1}')

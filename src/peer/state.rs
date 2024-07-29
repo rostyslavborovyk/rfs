@@ -4,7 +4,7 @@ use crate::peer::client::{LocalFSInfo};
 use tokio::sync::{Mutex};
 use crate::peer::file::FileManager;
 
-pub type SharableStateContainer = Arc<Mutex<StateContainer>>;
+pub type SharableStateContainer = Arc<Mutex<State>>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct KnownPeer {
@@ -12,22 +12,22 @@ pub struct KnownPeer {
     pub ping: Option<i64>,
 }
 
-pub struct StateContainer {
+pub struct State {
     pub known_peers: Vec<KnownPeer>,
     pub local_fs_info: LocalFSInfo,
     pub file_manager: FileManager,
 }
 
 
-impl Default for StateContainer {
+impl Default for State {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl StateContainer {
+impl State {
     pub fn new() -> Self {
-        StateContainer {
+        State {
             known_peers: vec![],
             local_fs_info: LocalFSInfo{},
             file_manager: FileManager::new(),

@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use distributed_fs::peer::client::Client;
 use distributed_fs::peer::listener::{refresh_pings_for_peers, serve_listener};
-use distributed_fs::peer::state_container::StateContainer;
+use distributed_fs::peer::state::State;
 
 use clap::Parser;
 
@@ -17,7 +17,7 @@ struct Args {
 async fn main() {
     let args: Args = Args::parse();
     
-    let sharable_state_container = Arc::new(Mutex::new(StateContainer::new()));
+    let sharable_state_container = Arc::new(Mutex::new(State::new()));
 
     let mut client = Client::new(args.address.clone(), sharable_state_container.clone());
     

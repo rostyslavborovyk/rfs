@@ -10,7 +10,7 @@ use crate::peer::connection::{
     InfoResponseFrame,
     PingResponseFrame,
 };
-use crate::peer::state_container::{KnownPeer, SharableStateContainer};
+use crate::peer::state::{KnownPeer, SharableStateContainer};
 use crate::values::RECALCULATE_PINGS_DELAY_SECS;
 
 async fn process_get_ping_frame(

@@ -2,12 +2,12 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use distributed_fs::peer::client::Client;
 use distributed_fs::peer::connection::{Connection, ConnectionFrame, GetFilePieceFrame};
-use distributed_fs::peer::state_container::StateContainer;
+use distributed_fs::peer::state::State;
 
 
 #[tokio::main]
 async fn main() {
-    let sharable_state_container = Arc::new(Mutex::new(StateContainer::new()));
+    let sharable_state_container = Arc::new(Mutex::new(State::new()));
 
     let mut client = Client::new("127.0.0.1:8000".to_string(), sharable_state_container.clone());
 

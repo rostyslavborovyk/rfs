@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 use crate::peer::file::RFSFile;
-use crate::peer::state_container::{KnownPeer, SharableStateContainer};
+use crate::peer::state::{KnownPeer, SharableStateContainer};
 use tokio::fs;
+use crate::domain::files::generate_meta_file;
 
 #[derive(Clone)]
 pub struct LocalFSInfo {}
@@ -20,10 +21,8 @@ impl Client {
     }
 
     pub async fn generate_meta_file(&self, path: &str) -> Result<(), String> {
-        let locked_state_container = self.state_container.lock().await;
-        let rfs_file = locked_state_container.file_manager
-            .generate_meta_file(self.address.clone(), path).await?;
-        rfs_file.save().await?;
+        let rfs_file = generate_meta_file(self.address.clone(), path)?;
+        rfs_file.save_to_project_dir().await?;
         Ok(())
     }
 
@@ -36,7 +35,7 @@ pub async fn load_state(&mut self, own_address: String) -> Result<(), String> {
     pub async fn load_metafiles(&mut self) -> Result<(), String> {
         let mut locked_state_container = self.state_container.lock().await;
         let home_dir = std::env::var("HOME").unwrap_or_else(|_| "".to_string());
-        let metafiles_dir = home_dir.clone() + "/.rfs_metafiles";
+        let metafiles_dir = home_dir.clone() + "/.rfs/metafiles";
         let mut entries = fs::read_dir(metafiles_dir).await.unwrap();
         while let Some(entry) = entries.next_entry().await.map_err(|_| "Failed to read entry")? {
             let path = entry.path();

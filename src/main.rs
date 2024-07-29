@@ -2,11 +2,11 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
 use distributed_fs::peer::client::{Client};
-use distributed_fs::peer::state_container::{StateContainer};
+use distributed_fs::peer::state::{State};
 
 #[tokio::main]
 async fn main() {
-    let sharable_state_container = Arc::new(Mutex::new(StateContainer::new()));
+    let sharable_state_container = Arc::new(Mutex::new(State::new()));
     
     let address = "127.0.0.1:8003".to_string();
     let mut client = Client::new(address.clone(), sharable_state_container.clone());

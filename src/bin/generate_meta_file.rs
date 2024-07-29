@@ -2,7 +2,7 @@ use std::sync::Arc;
 use clap::Parser;
 use tokio::sync::Mutex;
 use distributed_fs::peer::client::Client;
-use distributed_fs::peer::state_container::StateContainer;
+use distributed_fs::peer::state::State;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = "Path to the file")]
@@ -16,7 +16,7 @@ struct Args {
 async fn main() {
     let args: Args = Args::parse();
 
-    let sharable_state_container = Arc::new(Mutex::new(StateContainer::new()));
+    let sharable_state_container = Arc::new(Mutex::new(State::new()));
 
     let client = Arc::new(Client::new("127.0.0.1:8000".to_string(), sharable_state_container.clone()));
 

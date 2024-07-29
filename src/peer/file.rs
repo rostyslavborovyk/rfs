@@ -1,19 +1,15 @@
 use std::collections::HashMap;
 use tokio::fs;
-use base64::Engine;
-use base64::engine::general_purpose;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use crate::peer::models::File;
+use sha2::Digest;
 use tokio;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
-use uuid::Uuid;
+use crate::domain::models::File;
 use crate::peer::connection::{Connection, FilePieceResponseFrame};
 use crate::peer::enums::FileManagerFileStatus;
 use crate::utils::get_now;
-use crate::values::DEFAULT_PIECE_SIZE;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RFSFile {
@@ -37,13 +33,19 @@ impl RFSFile {
         }
     }
 
-    pub async fn save(&self) -> Result<(), String>{
+    pub async fn save_to_project_dir(&self) -> Result<(), String>{
         let path = String::from("meta_files/") 
             + &self.data.name.split('.').next()
             .ok_or("Failed to parse the file name, should be in format {name}.{extension}!")? 
             + ".rfs";
         let contents = serde_json::to_string(&self.data).unwrap();
         tokio::fs::write(path, contents).await.unwrap();
+        Ok(())
+    }
+
+    pub fn save(&self, path: String) -> Result<(), String>{
+        let contents = serde_json::to_string(&self.data).unwrap();
+        std::fs::write(path, contents).unwrap();
         Ok(())
     }
 
@@ -64,49 +66,6 @@ pub struct FileManager {
 }
 
 impl FileManager {
-    pub async fn generate_meta_file(&self, host_address: String, path: &str) -> Result<RFSFile, String> {
-        let name = path
-            .split('/').last().ok_or("Unable to get name from path!")?
-            .to_owned();
-        let contents = tokio::fs::read(path).await
-            .map_err(|err| format!("Error when reading file {err}"))?;
-
-        let length = contents.len() as u64;
-        let mut hasher = Sha256::new();
-        hasher.update(&contents);
-
-        let file_id = Uuid::new_v4().to_string();
-        let hash = general_purpose::STANDARD.encode(hasher.finalize());
-
-        let hashes: Vec<String> = (0..f64::ceil(contents.len() as f64 / DEFAULT_PIECE_SIZE as f64) as usize)
-            .map(|i| {
-                let start = i*DEFAULT_PIECE_SIZE as usize;
-                let end = (i + 1)*DEFAULT_PIECE_SIZE as usize;
-                let piece = if end < contents.len() {
-                    &contents[start..end]
-                } else {
-                    &contents[start..]
-                };
-                let mut hasher = Sha256::new();
-                hasher.update(piece);
-                general_purpose::STANDARD.encode(hasher.finalize())
-            }
-            ).collect();
-
-        Ok(
-            RFSFile {
-                data: File {
-                    id: file_id,
-                    hash,
-                    name,
-                    length,
-                    peers: vec![host_address],
-                    piece_size: DEFAULT_PIECE_SIZE,
-                    hashes,
-                }
-            })
-    }
-
     pub async fn get_file_piece(&mut self, file_id: String, piece: u64) -> Result<Vec<u8>, String> {
         let file = self.files.get(&file_id).ok_or(format!("File not found by id {:?}", file_id))?;
 

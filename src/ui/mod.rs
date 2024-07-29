@@ -1,3 +1,3 @@
 pub mod app;
-mod cilent;
+mod client;
 mod connection;
