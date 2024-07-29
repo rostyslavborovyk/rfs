@@ -1,3 +1,4 @@
+use std::time::Duration;
 use tokio::net::TcpListener;
 use crate::peer::connection::{
     Connection,
@@ -9,7 +10,8 @@ use crate::peer::connection::{
     InfoResponseFrame,
     PingResponseFrame,
 };
-use crate::peer::state_container::SharableStateContainer;
+use crate::peer::state_container::{KnownPeer, SharableStateContainer};
+use crate::values::RECALCULATE_PINGS_DELAY_SECS;
 
 async fn process_get_ping_frame(
     connection: &mut Connection,
@@ -21,11 +23,13 @@ async fn process_get_ping_frame(
 
 async fn process_get_info_frame(
     connection: &mut Connection,
-    _: &mut SharableStateContainer,
+    container: &mut SharableStateContainer,
     _: GetInfoFrame,
 ) {
+    let container_locked = container.lock().await;
     connection.write_frame(ConnectionFrame::InfoResponse(InfoResponseFrame {
-        file_ids: vec![],
+        file_ids: container_locked.file_manager.get_file_ids(),
+        known_peers: container_locked.known_peers.clone(),
     })).await;
 }
 
@@ -89,4 +93,44 @@ pub async fn serve_listener(
                 });
         });
     };
+}
+
+pub async fn refresh_pings_for_peers(
+    sharable_state_container: &mut SharableStateContainer,
+) {
+    loop {
+        let known_peers = {
+            let locked_state_container = sharable_state_container.lock().await;
+            locked_state_container.known_peers.clone()
+        };
+
+        let mut values = vec![];
+        for peer in known_peers {
+            let connection = Connection::from_address(&peer.address).await;
+            if let None = connection {
+                continue
+            }
+            let mut connection = connection.unwrap();
+
+            let ping = match connection.get_ping().await {
+                Ok(v) => v,
+                Err(err) => {
+                    println!("Error when getting ping from the client: {err}");
+                    continue
+                }
+            };
+            values.push(KnownPeer {
+                address: peer.address,
+                ping: Some(ping as i64),
+            });
+        }
+
+        {
+            let mut locked_state_container = sharable_state_container.lock().await;
+            println!("Updated values for known peers {:?}", values.clone());
+            locked_state_container.update_pings_for_peers(values);
+        }
+
+        tokio::time::sleep(Duration::from_secs(RECALCULATE_PINGS_DELAY_SECS)).await;
+    }
 }

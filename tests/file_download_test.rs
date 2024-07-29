@@ -18,7 +18,7 @@ async fn main() {
     let peer_sharable_state_container = Arc::new(Mutex::new(StateContainer::new()));
 
     let mut peer_client = Client::new(peer_address.clone(), peer_sharable_state_container.clone());
-    peer_client.load_metafiles().await.unwrap();
+    peer_client.load_state(peer_address.clone()).await.unwrap();
 
     tokio::spawn(async move {
         serve_listener(
@@ -30,8 +30,8 @@ async fn main() {
     // setting up the client
     let sharable_state_container = Arc::new(Mutex::new(StateContainer::new()));
 
-    let mut client = Client::new(host_address, sharable_state_container.clone());
-    client.load_metafiles().await.unwrap();
+    let mut client = Client::new(host_address.clone(), sharable_state_container.clone());
+    client.load_state(host_address).await.unwrap();
     client.download_file(String::from("0155d08b-609b-45fa-804d-53456c2a863d")).await.unwrap();
 
     let resulting_file = OpenOptions::new()

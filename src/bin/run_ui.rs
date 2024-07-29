@@ -5,7 +5,6 @@ fn main() {
     let mut native_options = eframe::NativeOptions::default();
     native_options.default_theme = Theme::Light;
     native_options.follow_system_theme = false;
-
     
     eframe::run_native(
         "Rfs",

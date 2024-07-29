@@ -4,6 +4,7 @@ pub enum ConnectionState {
     InfoRetrieved,
 }
 
+#[derive(Clone, Debug)]
 pub enum FileManagerFileStatus {
     Downloaded,
     NotDownloaded,

@@ -6,6 +6,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::{Instant, sleep};
 use crate::peer::enums::ConnectionState;
+use crate::peer::state_container::KnownPeer;
 use crate::values::DEFAULT_BUFFER_SIZE;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -14,6 +15,7 @@ pub struct GetInfoFrame {}
 #[derive(Serialize, Deserialize, Debug)]
 pub struct InfoResponseFrame {
     pub file_ids: Vec<String>,
+    pub known_peers: Vec<KnownPeer>
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -65,8 +67,9 @@ pub enum ConnectionFrame {
 
 #[derive(Debug)]
 pub struct ConnectionInfo {
-    pub ping: u128,
-    file_ids: Vec<String>,
+    pub ping: i64,
+    pub file_ids: Vec<String>,
+    pub known_peers: Vec<KnownPeer>,
 }
 
 
@@ -128,6 +131,19 @@ impl Connection {
         self.stream.write_all(data.as_ref()).await.expect("Failed to send GetInfo frame to the peer");
     }
 
+    pub async fn get_ping(&mut self) -> Result<u128, String> {
+        self.write_frame(ConnectionFrame::GetPing(GetPingFrame {})).await;
+
+        let start = Instant::now();
+        match self.read_frame().await? {
+            ConnectionFrame::PingResponse(_) => {},
+            _ => {
+                return Err("Wrong frame received!".to_string());
+            },
+        };
+        Ok(Instant::now().duration_since(start).as_micros())
+    }
+
     pub async fn retrieve_info(&mut self) -> Result<(), String> {
         if self.state != ConnectionState::Connected {
             return Err("Failed to retrieve info, connection is not in connected state!".to_string());
@@ -142,21 +158,13 @@ impl Connection {
             }
         };
 
-        self.write_frame(ConnectionFrame::GetPing(GetPingFrame {})).await;
-
-        let start = Instant::now();
-        match self.read_frame().await? {
-            ConnectionFrame::PingResponse(_) => {},
-            _ => {
-                return Err("Wrong frame received!".to_string());
-            },
-        };
-        let ping = Instant::now().duration_since(start).as_micros();
+        let ping = self.get_ping().await?;
 
         self.state = ConnectionState::InfoRetrieved;
         self.info = Some(ConnectionInfo {
-            ping,
+            ping: ping as i64,
             file_ids: info_response.file_ids,
+            known_peers: info_response.known_peers,
         });
         Ok(())
     }

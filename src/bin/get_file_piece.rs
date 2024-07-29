@@ -11,9 +11,9 @@ async fn main() {
 
     let mut client = Client::new("127.0.0.1:8000".to_string(), sharable_state_container.clone());
 
-    client.load_metafiles().await.unwrap();
+    client.load_state("127.0.0.1:8000".to_string()).await.unwrap();
 
-    let file_id = "BPCry8WD6vjfy51/QYn2cb/fZsfnKIIXCFjDUsHM/wA=".to_string();
+    let file_id = "ab4a916c-f6b2-4814-b056-d364d4019098".to_string();
     let piece = 0;
 
     let mut connection = Connection::from_address(&"127.0.0.1:8001".to_string()).await.unwrap();
