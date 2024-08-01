@@ -52,7 +52,7 @@ pub async fn load_state(&mut self, own_address: String) -> Result<(), String> {
         let mut locked_state_container = self.state_container.lock().await;
         let mut peers: HashSet<String> = HashSet::new();
         for file in locked_state_container.file_manager.get_files() {
-            for peer in file.file.data.peers {
+            for peer in file.data.peers {
                 if !peer.eq(&own_address) {
                     peers.insert(peer);
                 }

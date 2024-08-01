@@ -8,12 +8,12 @@ use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 use crate::domain::models::File;
 use crate::peer::connection::{Connection, FilePieceResponseFrame};
-use crate::peer::enums::FileManagerFileStatus;
-use crate::utils::get_now;
+use crate::peer::enums::FileStatus;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RFSFile {
-    pub data: File
+    pub data: File,
+    pub status: Option<FileStatus>,
 }
 
 impl RFSFile {
@@ -22,6 +22,7 @@ impl RFSFile {
         let data: File = serde_json::from_slice(contents.as_slice()).unwrap();
         RFSFile {
             data,
+            status: Default::default(),
         }
     }
     
@@ -30,6 +31,7 @@ impl RFSFile {
         let data: File = serde_json::from_slice(contents.as_slice()).unwrap();
         RFSFile {
             data,
+            status: Default::default(),
         }
     }
 
@@ -54,15 +56,8 @@ impl RFSFile {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct FileManagerFile {
-    pub file: RFSFile,
-    last_sync_with_local_fs: u128,
-    pub status: FileManagerFileStatus,
-}
-
 pub struct FileManager {
-    files: HashMap<String, FileManagerFile>,
+    files: HashMap<String, RFSFile>,
 }
 
 impl FileManager {
@@ -70,11 +65,11 @@ impl FileManager {
         let file = self.files.get(&file_id).ok_or(format!("File not found by id {:?}", file_id))?;
 
         // todo: rewrite to read only piece from the fs
-        let contents = tokio::fs::read(file.file.get_path()).await
+        let contents = tokio::fs::read(file.get_path()).await
             .map_err(|err| format!("Error when reading file {err}"))?;
 
-        let start = (file.file.data.piece_size * piece) as usize;
-        let end = (file.file.data.piece_size * (piece + 1)) as usize;
+        let start = (file.data.piece_size * piece) as usize;
+        let end = (file.data.piece_size * (piece + 1)) as usize;
 
         let piece = if end < contents.len() {
             &contents[start..end]
@@ -85,7 +80,7 @@ impl FileManager {
         Ok(piece.to_vec())
     }
 
-    pub fn get_files(&self) -> Vec<FileManagerFile> {
+    pub fn get_files(&self) -> Vec<RFSFile> {
         Vec::from_iter(self.files.values().cloned())
     }
 
@@ -134,12 +129,7 @@ impl FileManager {
     pub fn add_file(&mut self, file: RFSFile) {
         // todo: check if file with this name and piece hashes already present in the system
         let file_id = file.data.id.clone();
-        let file_ = FileManagerFile {
-            file,
-            last_sync_with_local_fs: get_now(),
-            status: FileManagerFileStatus::NotDownloaded,
-        };
-        self.files.insert(file_id, file_);
+        self.files.insert(file_id, file);
     }
 
     async fn save_file_piece(&self, frame: FilePieceResponseFrame) -> Result<(), String> {
@@ -174,7 +164,7 @@ impl FileManager {
     pub async fn download_file(&self, file_id: String) -> Result<(), String> {
         let file = self.files.get(&file_id).ok_or("No file with such name")?;
 
-        let peers = file.file.data.peers.clone();
+        let peers = file.data.peers.clone();
 
         let connections: Vec<Option<Connection>> = join_all(peers.iter().map(|addr| async move {
             match Connection::from_address(&addr.clone()).await {
@@ -203,7 +193,7 @@ impl FileManager {
         }).collect::<Vec<u128>>();
 
         let pieces_ratios = self.calculate_pieces_ratio(
-            file.file.data.hashes.len() as i64,
+            file.data.hashes.len() as i64,
             pings,
         );
 
@@ -219,7 +209,7 @@ impl FileManager {
             }
         };
 
-        self.assemble_file(file.file.data.name.clone(), piece_ids).await?;
+        self.assemble_file(file.data.name.clone(), piece_ids).await?;
         Ok(())
     }
 }

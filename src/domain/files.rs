@@ -1,9 +1,11 @@
+use std::io::{ErrorKind};
 use base64::Engine;
 use base64::engine::general_purpose;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 use crate::peer::file::RFSFile;
 use crate::domain::models::File;
+use crate::peer::enums::FileStatus;
 use crate::values::DEFAULT_PIECE_SIZE;
 
 pub fn generate_meta_file(host_address: String, path: &str) -> Result<RFSFile, String> {
@@ -45,6 +47,26 @@ pub fn generate_meta_file(host_address: String, path: &str) -> Result<RFSFile, S
                 peers: vec![host_address],
                 piece_size: DEFAULT_PIECE_SIZE,
                 hashes,
-            }
+            },
+            status: Default::default(),
         })
+}
+
+pub fn refresh_file_status(file: &mut RFSFile, files_dir: String) {
+    match std::fs::read(files_dir + "/" + &file.data.name) {
+        Ok(_) => {
+            // todo: check if hash matches
+            file.status = Some(FileStatus::Downloaded);
+        },
+        Err(err) => {
+            match err.kind() {
+                ErrorKind::NotFound => {
+                    file.status = Some(FileStatus::NotDownloaded);
+                }
+                err => {
+                    println!("Unhandled error {err}")
+                }
+            }
+        }
+    };
 }

@@ -7,6 +7,8 @@ lint:
 generate_meta_file:
 	cargo run --bin generate_meta_file -- --path files/image.HEIC
 
+start_local_peer:
+	cargo run --bin serve_peer -- --address 127.0.0.1:8001
 
 setup_1:
 	cargo run --bin serve_peer -- --address 127.0.0.1:8000 & \

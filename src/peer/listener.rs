@@ -11,7 +11,7 @@ use crate::peer::connection::{
     PingResponseFrame,
 };
 use crate::peer::state::{KnownPeer, SharableStateContainer};
-use crate::values::RECALCULATE_PINGS_DELAY_SECS;
+use crate::values::SYNC_DELAY_SECS;
 
 async fn process_get_ping_frame(
     connection: &mut Connection,
@@ -131,6 +131,6 @@ pub async fn refresh_pings_for_peers(
             locked_state_container.update_pings_for_peers(values);
         }
 
-        tokio::time::sleep(Duration::from_secs(RECALCULATE_PINGS_DELAY_SECS)).await;
+        tokio::time::sleep(Duration::from_secs(SYNC_DELAY_SECS)).await;
     }
 }
