@@ -1,15 +1,6 @@
 use std::time::Duration;
 use tokio::net::TcpListener;
-use crate::peer::connection::{
-    Connection,
-    ConnectionFrame,
-    FilePieceResponseFrame,
-    GetFilePieceFrame,
-    GetInfoFrame,
-    GetPingFrame,
-    InfoResponseFrame,
-    PingResponseFrame,
-};
+use crate::peer::connection::{Connection, ConnectionFrame, FilePieceResponseFrame, GetFileFrame, GetFilePieceFrame, GetInfoFrame, GetPingFrame, InfoResponseFrame, PingResponseFrame};
 use crate::peer::state::{KnownPeer, SharableStateContainer};
 use crate::values::SYNC_DELAY_SECS;
 
@@ -48,6 +39,17 @@ async fn process_get_file_piece_frame(
     Ok(())
 }
 
+async fn process_get_file_frame(
+    _: &mut Connection,
+    container: &mut SharableStateContainer,
+    frame: GetFileFrame,
+) -> Result<(), String> {
+    let container_locked = container.lock().await;
+    // todo: file download potentially long operation, should sync how to not block other connections
+    container_locked.file_manager.download_file(frame.file_id).await?;
+    Ok(())
+}
+
 
 // todo: rewrite with some pattern?
 async fn process_inbound_connection(
@@ -65,6 +67,9 @@ async fn process_inbound_connection(
             }
             ConnectionFrame::GetFilePiece(frame) => {
                 process_get_file_piece_frame(connection, sharable_state_container, frame).await?
+            }
+            ConnectionFrame::GetFile(frame) => {
+                process_get_file_frame(connection, sharable_state_container, frame).await?
             }
             _ => {
                 eprintln!("Wrong frame received!");

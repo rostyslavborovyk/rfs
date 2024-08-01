@@ -8,8 +8,10 @@ use eframe::egui;
 use eframe::egui::Color32;
 use eframe::emath::{Align};
 use tinyfiledialogs as tfd;
+use crate::domain::config::FSConfig;
 use crate::domain::files::{generate_meta_file, refresh_file_status};
-use crate::peer::connection::{ConnectionFrame, GetInfoFrame, InfoResponseFrame};
+use crate::domain::fs::check_folders;
+use crate::peer::connection::{ConnectionFrame, GetFileFrame, GetInfoFrame, InfoResponseFrame};
 use crate::peer::enums::FileStatus;
 use crate::peer::file::RFSFile;
 use crate::peer::state::KnownPeer;
@@ -29,28 +31,15 @@ pub struct AppState {
 #[derive(Default)]
 pub struct AppConfig {
     local_peer_address: String,
-    home_dir: String,
-    rfs_dir: String,
-    metafiles_dir: String,
-    file_parts_dir: String,
-    files_dir: String,
+    fs: FSConfig,
 }
 
 impl AppConfig {
     fn new() -> Self {
         let local_peer_address = LOCAL_PEER_ADDRESS.to_string();
-        let home_dir = std::env::var("HOME").unwrap_or_else(|_| "".to_string());
-        let rfs_dir = home_dir.clone() + "/.rfs";
-        let metafiles_dir = rfs_dir.clone() + "/metafiles";
-        let file_parts_dir = rfs_dir.clone() + "/file_parts";
-        let files_dir = rfs_dir.clone() + "/files";
         Self {
             local_peer_address,
-            home_dir,
-            rfs_dir,
-            metafiles_dir,
-            file_parts_dir,
-            files_dir,
+            fs: FSConfig::new(None),
         }
     }
 }
@@ -81,8 +70,14 @@ pub enum EventChannelEvent {
 }
 
 #[derive(Debug)]
+pub struct DownloadFileCommandPayload {
+    file_id: String,
+}
+
+#[derive(Debug)]
 pub enum CommandChannelEvent {
     GetPeersInfo,
+    DownloadFile(DownloadFileCommandPayload)
 }
 
 fn run_sync_scheduler(sync_tx: Sender<SyncChannelEvent>) -> ! {
@@ -109,6 +104,10 @@ fn run_background_worker(
                 CommandChannelEvent::GetPeersInfo => {
                     connection.write_frame(ConnectionFrame::GetInfo(GetInfoFrame {}));
                 }
+                CommandChannelEvent::DownloadFile(payload) => {
+                    let file_id = payload.file_id;
+                    connection.write_frame(ConnectionFrame::GetFile(GetFileFrame { file_id }));
+                }
             }
         }
         if let Ok(response) = connection.read_frame() {
@@ -129,17 +128,13 @@ impl RFSApp {
         let config = AppConfig::new();
         let mut state: AppState = Default::default();
 
-        state.rfs_files = fs::read_dir(&config.metafiles_dir).unwrap()
+        state.rfs_files = fs::read_dir(&config.fs.metafiles_dir).unwrap()
             .into_iter().map(|path| {
                 let p = path.unwrap().path().to_str().unwrap().to_owned();
                 RFSFile::from_path_sync(&p)
         }).collect();
 
-        if let Err(_) = fs::read_dir(&config.metafiles_dir) {
-            if let Err(err) = fs::create_dir(&config.metafiles_dir) {
-                println!("Metafiles dir was not found and unable to create it! {err}")
-            };
-        };
+        check_folders(&config.fs);
 
         // todo: change to oneshot channel
         let (sync_tx, sync_rx) = channel();
@@ -189,18 +184,18 @@ impl RFSApp {
         egui::SidePanel::right("right_panel").exact_width(100.).resizable(false).show(ctx, |ui| {
             ui.with_layout(egui::Layout::top_down(Align::Center), |ui| {
                 if ui.add_sized([100., 0.0], egui::Button::new("Add .rfs file")).clicked() {
-                    if let Some(path) = tfd::open_file_dialog("Select .rfs file", &self.config.home_dir, Some((&["*.rfs"], ""))) {
+                    if let Some(path) = tfd::open_file_dialog("Select .rfs file", &self.config.fs.home_dir, Some((&["*.rfs"], ""))) {
                         self.add_rfs_file(path);
                     }
                 }
                 if ui.add_sized([100., 0.0], egui::Button::new("Generate .rfs file")).clicked() {
-                    if let Some(path) = tfd::open_file_dialog("Select a file to generate .rfs file", &self.config.home_dir, None) {
+                    if let Some(path) = tfd::open_file_dialog("Select a file to generate .rfs file", &self.config.fs.home_dir, None) {
                         self.generate_rfs_file(path);
                     }
                 }
                 if ui.add_sized([100., 0.0], egui::Button::new("Open files dir")).clicked() {
                     Command::new("open")
-                        .arg(&self.config.files_dir)
+                        .arg(&self.config.fs.files_dir)
                         .spawn()
                         .unwrap();
                 }
@@ -212,7 +207,12 @@ impl RFSApp {
                                 FileStatus::Downloaded => {}
                                 FileStatus::NotDownloaded => {
                                     if ui.add_sized([100., 0.0], egui::Button::new("Download")).clicked() {
-                                        println!("Downloading file!")
+                                        let command = CommandChannelEvent::DownloadFile(
+                                            DownloadFileCommandPayload {
+                                                file_id: file.data.id
+                                            }
+                                        );
+                                        self.channels.command_tx.send(command).unwrap()
                                     }
                                 }
                             }
@@ -236,7 +236,7 @@ impl RFSApp {
                 }
                 SyncChannelEvent::RefreshFileStatus => {
                     for file in self.state.rfs_files.iter_mut() {
-                        refresh_file_status(file, self.config.files_dir.clone());
+                        refresh_file_status(file, self.config.fs.files_dir.clone());
                     }
                 }
             }
@@ -290,9 +290,10 @@ impl RFSApp {
                         } else {
                             0i64
                         };
-                        self.render_info_panel_field(
-                            ui, peer, &ping.to_string(), 20.,
-                        );
+                        if peer == LOCAL_PEER_ADDRESS {
+                            continue;
+                        }
+                        self.render_info_panel_field(ui, peer, &ping.to_string(), 20.);
                     }
                     let downloaded_status = if let Some(s) = &file.status {
                         match s {
@@ -322,7 +323,7 @@ impl RFSApp {
     fn add_rfs_file(&mut self, path: String) {
         let path = path.clone();
         let file_name = path.split('/').last().unwrap();
-        let destination = self.config.metafiles_dir.clone() + &"/" + file_name;
+        let destination = self.config.fs.metafiles_dir.clone() + &"/" + file_name;
         fs::copy(path, &destination).unwrap_or_else(|err| {
             println!("Unable to copy file to metafiles dir {err}");
             0
@@ -331,7 +332,7 @@ impl RFSApp {
     }
 
     fn generate_rfs_file(&mut self, path: String) -> Result<(), String> {
-        let meta_file_path = self.config.metafiles_dir.clone()
+        let meta_file_path = self.config.fs.metafiles_dir.clone()
             + "/"
             + path.clone().split('/').last().unwrap().split('.').next()
             .ok_or("Failed to parse the file name, should be in format {name}.{extension}!")?
@@ -340,7 +341,7 @@ impl RFSApp {
             rfs_file.save(meta_file_path.clone())?;
             self.state.rfs_files.push(RFSFile::from_path_sync(&meta_file_path));
             
-            fs::copy(path, self.config.files_dir.clone() + "/" + &rfs_file.data.name).unwrap_or_else(|err| {
+            fs::copy(path, self.config.fs.files_dir.clone() + "/" + &rfs_file.data.name).unwrap_or_else(|err| {
                 println!("Unable to copy file to metafiles dir {err}");
                 0
             });

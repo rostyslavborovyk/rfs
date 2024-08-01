@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use crate::peer::file::RFSFile;
 use crate::peer::state::{KnownPeer, SharableStateContainer};
 use tokio::fs;
+use crate::domain::config::FSConfig;
 use crate::domain::files::generate_meta_file;
 
 #[derive(Clone)]
@@ -26,17 +27,15 @@ impl Client {
         Ok(())
     }
 
-pub async fn load_state(&mut self, own_address: String) -> Result<(), String> {
-        self.load_metafiles().await?;
+pub async fn load_state(&mut self, own_address: String, fs_config: &FSConfig) -> Result<(), String> {
+        self.load_metafiles(fs_config).await?;
         self.set_known_peers_from_files(own_address).await?;
         Ok(())
     }
     
-    pub async fn load_metafiles(&mut self) -> Result<(), String> {
+    pub async fn load_metafiles(&mut self, fs_config: &FSConfig) -> Result<(), String> {
         let mut locked_state_container = self.state_container.lock().await;
-        let home_dir = std::env::var("HOME").unwrap_or_else(|_| "".to_string());
-        let metafiles_dir = home_dir.clone() + "/.rfs/metafiles";
-        let mut entries = fs::read_dir(metafiles_dir).await.unwrap();
+        let mut entries = fs::read_dir(fs_config.metafiles_dir.clone()).await.unwrap();
         while let Some(entry) = entries.next_entry().await.map_err(|_| "Failed to read entry")? {
             let path = entry.path();
             let path = path.to_str().unwrap();

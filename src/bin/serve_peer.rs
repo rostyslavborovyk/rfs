@@ -5,12 +5,18 @@ use distributed_fs::peer::listener::{refresh_pings_for_peers, serve_listener};
 use distributed_fs::peer::state::State;
 
 use clap::Parser;
+use distributed_fs::domain::config::FSConfig;
+use distributed_fs::domain::fs::check_folders;
+use distributed_fs::values::LOCAL_PEER_ADDRESS;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value_t = String::from("127.0.0.1:8001"))]
-    address: String,
+    #[arg(short, long)]
+    address: Option<String>,
+
+    #[arg(short, long)]
+    rfs_dir: Option<String>,
 }
 
 #[tokio::main]
@@ -19,17 +25,24 @@ async fn main() {
     
     let sharable_state_container = Arc::new(Mutex::new(State::new()));
 
-    let mut client = Client::new(args.address.clone(), sharable_state_container.clone());
+    let address = args.address.unwrap_or(LOCAL_PEER_ADDRESS.to_string());
     
-    client.load_state(args.address.clone()).await.unwrap();
+    let mut client = Client::new(address.clone(), sharable_state_container.clone());
+    
+    let fs_config = FSConfig::new(args.rfs_dir);
+    check_folders(&fs_config);
+    
+    client.load_state(address.clone(), &fs_config).await.unwrap();
 
+    println!("Starting peer with address {} and fs location {} ...", address, fs_config.rfs_dir);
+    
     let mut c = sharable_state_container.clone();
     tokio::spawn(async move {
         refresh_pings_for_peers(&mut c).await;
     });
 
     serve_listener(
-        args.address,
+        address,
         &mut sharable_state_container.clone(),
     ).await
 }

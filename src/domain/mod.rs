@@ -2,3 +2,5 @@
 
 pub mod files;
 pub mod models;
+pub mod fs;
+pub mod config;

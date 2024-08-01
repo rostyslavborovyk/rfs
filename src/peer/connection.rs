@@ -1,6 +1,7 @@
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
-// todo: cbor serialization still produces 31Kb size for the frame with 16Kb of contents. Maybe check some other available formats
+// todo: cbor serialization still produces 31Kb size for the frame with 16Kb of contents. 
+// Maybe check some other available formats, or write own binary protocol?
 use serde_cbor::{from_slice, to_vec};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -28,6 +29,11 @@ pub struct PingResponseFrame {}
 pub struct GetFilePieceFrame {
     pub file_id: String,
     pub piece: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GetFileFrame {
+    pub file_id: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -60,6 +66,9 @@ pub enum ConnectionFrame {
 
     #[serde(rename = "GetFilePiece")]
     GetFilePiece(GetFilePieceFrame),
+
+    #[serde(rename = "GetFile")]
+    GetFile(GetFileFrame),
 
     #[serde(rename = "FilePieceResponse")]
     FilePieceResponse(FilePieceResponseFrame),
