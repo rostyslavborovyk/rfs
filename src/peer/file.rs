@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use tokio::fs;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
-use sha2::Digest;
 use tokio;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;

@@ -9,10 +9,11 @@ use eframe::egui::Color32;
 use eframe::emath::{Align};
 use tinyfiledialogs as tfd;
 use crate::domain::files::{generate_meta_file, refresh_file_status};
+use crate::peer::connection::{ConnectionFrame, GetInfoFrame, InfoResponseFrame};
 use crate::peer::enums::FileStatus;
 use crate::peer::file::RFSFile;
 use crate::peer::state::KnownPeer;
-use crate::ui::client::get_info;
+use crate::ui::connection::Connection;
 use crate::values::{LOCAL_PEER_ADDRESS, SYNC_DELAY_SECS};
 
 const ACCENT: Color32 = Color32::from_rgb(200, 255, 200);
@@ -35,9 +36,30 @@ pub struct AppConfig {
     files_dir: String,
 }
 
+impl AppConfig {
+    fn new() -> Self {
+        let local_peer_address = LOCAL_PEER_ADDRESS.to_string();
+        let home_dir = std::env::var("HOME").unwrap_or_else(|_| "".to_string());
+        let rfs_dir = home_dir.clone() + "/.rfs";
+        let metafiles_dir = rfs_dir.clone() + "/metafiles";
+        let file_parts_dir = rfs_dir.clone() + "/file_parts";
+        let files_dir = rfs_dir.clone() + "/files";
+        Self {
+            local_peer_address,
+            home_dir,
+            rfs_dir,
+            metafiles_dir,
+            file_parts_dir,
+            files_dir,
+        }
+    }
+}
+
 pub struct AppChannels {
-    // todo: change to the channel with capacity 1 to avoid memory leaks?
     sync_rx: Receiver<SyncChannelEvent>,
+    event_rx: Receiver<EventChannelEvent>,
+
+    command_tx: Sender<CommandChannelEvent>,
 }
 
 
@@ -53,6 +75,16 @@ pub enum SyncChannelEvent {
     RefreshFileStatus,
 }
 
+#[derive(Debug)]
+pub enum EventChannelEvent {
+    PeersInfoUpdate(InfoResponseFrame)
+}
+
+#[derive(Debug)]
+pub enum CommandChannelEvent {
+    GetPeersInfo,
+}
+
 fn run_sync_scheduler(sync_tx: Sender<SyncChannelEvent>) -> ! {
     loop {
         if let Err(err) = sync_tx.send(SyncChannelEvent::RecalculatePings) {
@@ -65,20 +97,42 @@ fn run_sync_scheduler(sync_tx: Sender<SyncChannelEvent>) -> ! {
     }
 }
 
+
+fn run_background_worker(
+    command_rx: Receiver<CommandChannelEvent>,
+    event_tx: Sender<EventChannelEvent>,
+) -> ! {
+    let mut connection = Connection::from_address(&LOCAL_PEER_ADDRESS.to_string()).unwrap();
+    loop {
+        if let Ok(command) = command_rx.try_recv() {
+            match command {
+                CommandChannelEvent::GetPeersInfo => {
+                    connection.write_frame(ConnectionFrame::GetInfo(GetInfoFrame {}));
+                }
+            }
+        }
+        if let Ok(response) = connection.read_frame() {
+            match response {
+                ConnectionFrame::InfoResponse(frame) => {
+                    event_tx.send(EventChannelEvent::PeersInfoUpdate(frame)).unwrap()
+                }
+                _ => {}
+            }
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
+
 impl RFSApp {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        let mut config: AppConfig = Default::default();
+        let config = AppConfig::new();
         let mut state: AppState = Default::default();
 
-        config.local_peer_address = LOCAL_PEER_ADDRESS.to_string();
-        config.home_dir = std::env::var("HOME").unwrap_or_else(|_| "".to_string());
-        config.rfs_dir = config.home_dir.clone() + "/.rfs";
-        config.metafiles_dir = config.rfs_dir.clone() + "/metafiles";
-        config.file_parts_dir = config.rfs_dir.clone() + "/file_parts";
-        config.files_dir = config.rfs_dir.clone() + "/files";
-        state.rfs_files = fs::read_dir(&config.metafiles_dir).unwrap().into_iter().map(|path| {
-            let p = path.unwrap().path().to_str().unwrap().to_owned();
-            RFSFile::from_path_sync(&p)
+        state.rfs_files = fs::read_dir(&config.metafiles_dir).unwrap()
+            .into_iter().map(|path| {
+                let p = path.unwrap().path().to_str().unwrap().to_owned();
+                RFSFile::from_path_sync(&p)
         }).collect();
 
         if let Err(_) = fs::read_dir(&config.metafiles_dir) {
@@ -89,19 +143,23 @@ impl RFSApp {
 
         // todo: change to oneshot channel
         let (sync_tx, sync_rx) = channel();
+        let (command_tx, command_rx) = channel();
+        let (event_tx, event_rx) = channel();
 
         // spawning a thread that will trigger synchronization events in the app
         thread::spawn(move || run_sync_scheduler(sync_tx));
         
         // spawning a background thread that will handle interactions with local peer without
         // blocking main ui thread
-        // todo
+        thread::spawn(move || run_background_worker(command_rx, event_tx));
 
         Self {
             config,
             state,
             channels: AppChannels {
                 sync_rx,
+                command_tx,
+                event_rx,
             }
         }
     }
@@ -167,9 +225,6 @@ impl RFSApp {
     }
 
     fn listen_channels(&mut self, ctx: &egui::Context) {
-        // todo: spawn a separate thread for that?
-        // for now it works quite fast <1ms
-        
         ctx.request_repaint();
         
         if let Ok(v) = self.channels.sync_rx.try_recv() {
@@ -177,8 +232,7 @@ impl RFSApp {
             
             match v {
                 SyncChannelEvent::RecalculatePings => {
-                    let info = get_info();
-                    self.state.known_peers = info.known_peers;
+                    self.channels.command_tx.send(CommandChannelEvent::GetPeersInfo).unwrap();
                 }
                 SyncChannelEvent::RefreshFileStatus => {
                     for file in self.state.rfs_files.iter_mut() {
@@ -187,6 +241,17 @@ impl RFSApp {
                 }
             }
             println!("Time spent for syncing {:?}: {}μ", v, start.elapsed().as_micros())
+        }
+                
+        if let Ok(v) = self.channels.event_rx.try_recv() {
+            let start = Instant::now();
+            
+            match v {
+                EventChannelEvent::PeersInfoUpdate(frame) => {
+                    self.state.known_peers = frame.known_peers;
+                }
+            }
+            println!("Time spent for syncing events: {}μ",  start.elapsed().as_micros())
         }
     }
 
