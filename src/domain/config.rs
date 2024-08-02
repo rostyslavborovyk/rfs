@@ -1,6 +1,6 @@
 use crate::values::DEFAULT_RFS_DIR;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct FSConfig {
     pub home_dir: String,
     pub rfs_dir: String,

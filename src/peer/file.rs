@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use tokio;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
+use crate::domain::config::FSConfig;
 use crate::domain::models::File;
 use crate::peer::connection::{Connection, FilePieceResponseFrame};
 use crate::peer::enums::FileStatus;
@@ -57,6 +58,7 @@ impl RFSFile {
 
 pub struct FileManager {
     files: HashMap<String, RFSFile>,
+    fs_config: FSConfig
 }
 
 impl FileManager {
@@ -88,16 +90,11 @@ impl FileManager {
     }
 }
 
-impl Default for FileManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl FileManager {
-    pub fn new() -> Self {
+    pub fn new(fs_config: FSConfig) -> Self {
         Self {
             files: Default::default(),
+            fs_config,
         }
     }
 
@@ -141,7 +138,7 @@ impl FileManager {
         let mut file = OpenOptions::new()
             .write(true)
             .create(true)
-            .open("files/new-".to_string() + &file_name)
+            .open(self.fs_config.files_dir.clone() + "/" + &file_name)
             .await
             .map_err(|err| format!("Error when opening a file {err}"))?;
 

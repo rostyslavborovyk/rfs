@@ -131,8 +131,12 @@ impl RFSApp {
         state.rfs_files = fs::read_dir(&config.fs.metafiles_dir).unwrap()
             .into_iter().map(|path| {
                 let p = path.unwrap().path().to_str().unwrap().to_owned();
-                RFSFile::from_path_sync(&p)
-        }).collect();
+                if p.ends_with(".rfs") {
+                    Some(RFSFile::from_path_sync(&p))
+                } else {
+                    None
+                }
+        }).flatten().collect();
 
         check_folders(&config.fs);
 
@@ -242,10 +246,10 @@ impl RFSApp {
             }
             println!("Time spent for syncing {:?}: {}μ", v, start.elapsed().as_micros())
         }
-                
+
         if let Ok(v) = self.channels.event_rx.try_recv() {
             let start = Instant::now();
-            
+
             match v {
                 EventChannelEvent::PeersInfoUpdate(frame) => {
                     self.state.known_peers = frame.known_peers;

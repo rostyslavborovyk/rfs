@@ -2,6 +2,8 @@ use std::os::macos::fs::MetadataExt;
 use std::sync::Arc;
 use tokio::fs::OpenOptions;
 use tokio::sync::Mutex;
+use distributed_fs::domain::config::FSConfig;
+use distributed_fs::domain::fs::check_folders;
 use distributed_fs::peer::client::Client;
 use distributed_fs::peer::listener::serve_listener;
 use distributed_fs::peer::state::State;
@@ -15,10 +17,13 @@ async fn main() {
     let peer_address = "127.0.0.1:8001".to_string();
     let host_address = "127.0.0.1:8003".to_string();
 
-    let peer_sharable_state_container = Arc::new(Mutex::new(State::new()));
+    let fs_config = FSConfig::new(None);
+    check_folders(&fs_config);
+
+    let peer_sharable_state_container = Arc::new(Mutex::new(State::new(fs_config.clone())));
 
     let mut peer_client = Client::new(peer_address.clone(), peer_sharable_state_container.clone());
-    peer_client.load_state(peer_address.clone()).await.unwrap();
+    peer_client.load_state(peer_address.clone(), &fs_config).await.unwrap();
 
     tokio::spawn(async move {
         serve_listener(
@@ -28,10 +33,10 @@ async fn main() {
     });
 
     // setting up the client
-    let sharable_state_container = Arc::new(Mutex::new(State::new()));
+    let sharable_state_container = Arc::new(Mutex::new(State::new(fs_config.clone())));
 
     let mut client = Client::new(host_address.clone(), sharable_state_container.clone());
-    client.load_state(host_address).await.unwrap();
+    client.load_state(host_address, &fs_config).await.unwrap();
     client.download_file(String::from("0155d08b-609b-45fa-804d-53456c2a863d")).await.unwrap();
 
     let resulting_file = OpenOptions::new()

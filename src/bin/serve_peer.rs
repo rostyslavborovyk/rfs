@@ -23,14 +23,16 @@ struct Args {
 async fn main() {
     let args: Args = Args::parse();
     
-    let sharable_state_container = Arc::new(Mutex::new(State::new()));
+    let fs_config = FSConfig::new(args.rfs_dir);
+    check_folders(&fs_config);
+    
+    let sharable_state_container = Arc::new(Mutex::new(State::new(fs_config.clone())));
 
     let address = args.address.unwrap_or(LOCAL_PEER_ADDRESS.to_string());
     
     let mut client = Client::new(address.clone(), sharable_state_container.clone());
     
-    let fs_config = FSConfig::new(args.rfs_dir);
-    check_folders(&fs_config);
+
     
     client.load_state(address.clone(), &fs_config).await.unwrap();
 

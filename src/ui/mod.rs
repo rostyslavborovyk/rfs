@@ -1,2 +1,2 @@
 pub mod app;
-mod connection;
+pub mod connection;

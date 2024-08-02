@@ -1,5 +1,5 @@
 test:
-	RUST_MIN_STACK=10485760 cargo test
+	RUST_MIN_STACK=4194304 cargo test
 
 lint:
 	cargo fix --allow-dirty --allow-staged

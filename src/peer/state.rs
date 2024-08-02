@@ -2,6 +2,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use crate::peer::client::{LocalFSInfo};
 use tokio::sync::{Mutex};
+use crate::domain::config::FSConfig;
 use crate::peer::file::FileManager;
 
 pub type SharableStateContainer = Arc<Mutex<State>>;
@@ -18,19 +19,12 @@ pub struct State {
     pub file_manager: FileManager,
 }
 
-
-impl Default for State {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl State {
-    pub fn new() -> Self {
+    pub fn new(fs_config: FSConfig) -> Self {
         State {
             known_peers: vec![],
             local_fs_info: LocalFSInfo{},
-            file_manager: FileManager::new(),
+            file_manager: FileManager::new(fs_config),
         }
     }
     
