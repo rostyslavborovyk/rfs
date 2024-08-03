@@ -9,5 +9,6 @@ pub enum ConnectionState {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum FileStatus {
     Downloaded,
+    Downloading,
     NotDownloaded,
 }

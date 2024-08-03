@@ -8,7 +8,7 @@ pub struct File {
     pub hash: String,
     pub name: String,
     pub length: u64,
-    pub peers: Vec<String>,  // rename to seeds
+    pub peers: Vec<String>,  // todo: rename to seeds
     pub piece_size: u64,
     pub hashes: Vec<String>,
 }

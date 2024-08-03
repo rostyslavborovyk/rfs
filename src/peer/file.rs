@@ -162,15 +162,7 @@ impl FileManager {
 
         let peers = file.data.peers.clone();
 
-        let connections: Vec<Option<Connection>> = join_all(peers.iter().map(|addr| async move {
-            match Connection::from_address(&addr.clone()).await {
-                None => {
-                    println!("Failed to connect to {:?}", addr);
-                    None
-                }
-                Some(c) => Some(c),
-            }
-        })).await;
+        let connections: Vec<Option<Connection>> = Connection::from_addresses(peers).await;
 
         let connections = join_all(connections.into_iter().flatten().map(|mut c| async {
             if let Err(e) = c.retrieve_info().await {
@@ -181,18 +173,12 @@ impl FileManager {
 
         let pings = connections.iter().map(|c| {
             match &c.info {
-                None => {
-                    u128::MAX
-                }
+                None => u128::MAX,
                 Some(info) => info.ping as u128
             }
         }).collect::<Vec<u128>>();
 
-        let pieces_ratios = self.calculate_pieces_ratio(
-            file.data.hashes.len() as i64,
-            pings,
-        );
-
+        let pieces_ratios = self.calculate_pieces_ratio(file.data.hashes.len() as i64, pings);
         let assigned_pieces = self.assign_pieces(pieces_ratios);
 
         let mut piece_ids = vec![];

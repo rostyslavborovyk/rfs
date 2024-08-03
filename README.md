@@ -32,24 +32,6 @@ UI will be built with one of the libraries (possibly https://www.egui.rs/). It s
 represent the state of the system (represent the peers and possibly the ping values for them, some other info about the 
 peers). The second view should represent the view of downloaded files (akin to µtorrent)
 
-
-## Requirements
-
-1. Loading metadata file from memory 
-
-## To do
-- Create a context diagram for the project
-- Create a class diagram for the project
-- Create a http server that is able to accepts commands (i.e download file, get info, etc.) for the future UI integration
-- Watch https://www.youtube.com/watch?v=NtUkr_z7l84
-
-## In progress
-- Refactor other todos, improve project structure
-
-## Completed
-- Write integration tests
-- Change protocol from json to binary
-
 ## UI
 1. Represent a list of metafiles present in the system with some info (name, size, downloaded or not, etc.)
 2. Each of the file items can be opened and the info about available peers(seeds) is shown to the users with some refresh interval

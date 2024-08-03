@@ -16,13 +16,20 @@ use crate::peer::enums::FileStatus;
 use crate::peer::file::RFSFile;
 use crate::peer::state::KnownPeer;
 use crate::ui::connection::Connection;
+use crate::ui::enums::LeftPanelView;
+use crate::ui::format::to_readable_size;
 use crate::values::{LOCAL_PEER_ADDRESS, SYNC_DELAY_SECS};
 
 const ACCENT: Color32 = Color32::from_rgb(200, 255, 200);
+const SUCCESS: Color32 = Color32::from_rgb(150, 255, 150);
+const INFO: Color32 = Color32::from_rgb(150, 255, 255);
+const WARNING: Color32 = Color32::from_rgb(255, 220, 200);
+
 
 #[derive(Default)]
 pub struct AppState {
     file_id_selected: RefCell<Option<String>>,
+    left_panel_view_selected: LeftPanelView,
     rfs_files: Vec<RFSFile>,
     known_peers: Vec<KnownPeer>,
 }
@@ -166,7 +173,7 @@ impl RFSApp {
 
 impl eframe::App for RFSApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.render_file_panel(ctx);
+        self.render_left_panel(ctx);
         self.render_info_panel(ctx);
         self.render_button_panel(ctx);
         render_footer(ctx);
@@ -175,13 +182,36 @@ impl eframe::App for RFSApp {
 }
 
 impl RFSApp {
-    fn render_file_panel(&mut self, ctx: &egui::Context) {
+    fn render_left_panel(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("left_panel").exact_width(350.).resizable(false).show(ctx, |ui| {
-            ui.with_layout(egui::Layout::top_down(Align::Center), |ui| {
-                for file in self.state.rfs_files.iter() {
-                    self.render_file(ui, file);
-                }
+            ui.with_layout(egui::Layout::left_to_right(Align::TOP), |ui| {
+                let mut files_btn = egui::Button::new("Files");
+                let mut known_peers_btn = egui::Button::new("Known peers");
+                match self.state.left_panel_view_selected {
+                    LeftPanelView::Files => {
+                        files_btn = files_btn.fill(ACCENT);
+                    },
+                    LeftPanelView::KnownPeers => {
+                        known_peers_btn = known_peers_btn.fill(ACCENT);
+                    }
+                };
+                if ui.add_sized([ui.available_width() * 0.5, 0.0], files_btn).clicked() {
+                    self.state.left_panel_view_selected = LeftPanelView::Files;
+                };
+                if ui.add_sized([ui.available_width(), 0.0], known_peers_btn).clicked() {
+                    self.state.left_panel_view_selected = LeftPanelView::KnownPeers;
+                };
             });
+            match self.state.left_panel_view_selected {
+                LeftPanelView::Files => {
+                    ui.with_layout(egui::Layout::top_down(Align::Center), |ui| {
+                        for file in self.state.rfs_files.iter() {
+                            self.render_file(ui, file);
+                        }
+                    });
+                }
+                LeftPanelView::KnownPeers => {}
+            }
         });
     }
     fn render_button_panel(&mut self, ctx: &egui::Context) {
@@ -203,25 +233,11 @@ impl RFSApp {
                         .spawn()
                         .unwrap();
                 }
-                if let Some(file) = self.get_selected_file() {
-                    match file.status {
-                        None => {}
-                        Some(v) => {
-                            match v {
-                                FileStatus::Downloaded => {}
-                                FileStatus::NotDownloaded => {
-                                    if ui.add_sized([100., 0.0], egui::Button::new("Download")).clicked() {
-                                        let command = CommandChannelEvent::DownloadFile(
-                                            DownloadFileCommandPayload {
-                                                file_id: file.data.id
-                                            }
-                                        );
-                                        self.channels.command_tx.send(command).unwrap()
-                                    }
-                                }
-                            }
-                        }
-                    }
+                if ui.add_sized([100., 0.0], egui::Button::new("Open metafiles dir")).clicked() {
+                    Command::new("open")
+                        .arg(&self.config.fs.metafiles_dir)
+                        .spawn()
+                        .unwrap();
                 }
                 ui.add_space(5.);
             });
@@ -281,9 +297,12 @@ impl RFSApp {
                 Some(file) => {
                     self.render_info_panel_field(ui, "id", &file.data.id.clone(), 0.);
                     self.render_info_panel_field(ui, "hash", &file.data.hash.clone(), 0.);
+                    self.render_info_panel_field(ui, "size", &to_readable_size(file.data.length), 0.);
                     self.render_info_panel_field(ui, "piece size", &file.data.piece_size.to_string(), 0.);
                     self.render_info_panel_field(ui, "number of pieces", &file.data.hashes.len().to_string(), 0.);
-                    self.render_info_panel_field(ui, "peers", &file.data.peers.len().to_string(), 0.);
+                    
+                    let peers_count = file.data.peers.iter().filter(|p| !p.eq(&&self.config.local_peer_address)).count();
+                    self.render_info_panel_field(ui, "peers", &peers_count.to_string(), 0.);
                     for peer in file.data.peers.iter() {
                         let ping = if let Some(known_peer) = self.state.known_peers.iter().find(|p| p.address.eq(peer)) {
                             if let Some(ping) = known_peer.ping {
@@ -302,7 +321,8 @@ impl RFSApp {
                     let downloaded_status = if let Some(s) = &file.status {
                         match s {
                             FileStatus::Downloaded => "Downloaded",
-                            FileStatus::NotDownloaded => "Not downloaded"
+                            FileStatus::NotDownloaded => "Not downloaded",
+                            FileStatus::Downloading => "Downloading",
                         }
                     } else {
                         "Not verified"
@@ -356,12 +376,9 @@ impl RFSApp {
     fn render_file(&self, ui: &mut egui::Ui, file: &RFSFile) {
         ui.horizontal(|ui| {
             ui.label(format!("{}", file.data.name));
-            ui.with_layout(egui::Layout::left_to_right(Align::TOP), |ui| {
-                ui.label(format!("{}", file.data.length));
-            });
 
-            let btn = ui.with_layout(egui::Layout::right_to_left(Align::TOP), |ui| {
-                ui.add_sized([30., 0.0], {
+            ui.with_layout(egui::Layout::right_to_left(Align::TOP), |ui| {
+                if ui.add_sized([30., 0.0], {
                     let btn = egui::Button::new("⏵");
                     if let Some(file_id) = &self.state.file_id_selected.borrow().deref() {
                         if file_id.eq(&file.data.id) {
@@ -372,12 +389,45 @@ impl RFSApp {
                     } else {
                         btn
                     }
-                })
+                }).clicked() {
+                    self.state.file_id_selected.replace(Some(file.data.id.clone()));
+                };
+                
+                match file.status.clone() {
+                    None => {}
+                    Some(v) => {
+                        match v {
+                            FileStatus::Downloaded => {
+                                ui.add_sized([30., 0.0], egui::Button::new("⬇").fill(SUCCESS));
+                            }
+                            FileStatus::NotDownloaded => {
+                                let has_accessible_peers = file.data.peers.iter().map(|p| {
+                                    let kp = self.state.known_peers.iter().find(|kp| kp.address.eq(p));
+                                    if let Some(v) = kp {
+                                        v.accessible()
+                                    } else {
+                                        false
+                                    }
+                                }).any(|v| v);
+                                
+                                if has_accessible_peers {
+                                    if ui.add_sized([30., 0.0], egui::Button::new("⬇")).clicked() {
+                                        let command = CommandChannelEvent::DownloadFile(
+                                            DownloadFileCommandPayload {
+                                                file_id: file.data.id.clone()
+                                            }
+                                        );
+                                        self.channels.command_tx.send(command).unwrap()
+                                    }
+                                } else {
+                                    ui.add_sized([30., 0.0], egui::Button::new("⬇").fill(WARNING)).clicked();
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
             });
-            
-            if btn.inner.clicked() {
-                self.state.file_id_selected.replace(Some(file.data.id.clone()));
-            }
         });
         ui.add_space(1.);
         ui.separator();

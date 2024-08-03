@@ -15,8 +15,6 @@ async fn main() {
     let sharable_state_container = Arc::new(Mutex::new(State::new(fs_config.clone())));
 
     let mut client = Client::new("127.0.0.1:8000".to_string(), sharable_state_container.clone());
-
-
     
     client.load_state("127.0.0.1:8000".to_string(), &fs_config).await.unwrap();
 

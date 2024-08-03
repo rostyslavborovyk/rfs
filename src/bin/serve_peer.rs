@@ -32,8 +32,6 @@ async fn main() {
     
     let mut client = Client::new(address.clone(), sharable_state_container.clone());
     
-
-    
     client.load_state(address.clone(), &fs_config).await.unwrap();
 
     println!("Starting peer with address {} and fs location {} ...", address, fs_config.rfs_dir);

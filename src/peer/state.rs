@@ -13,6 +13,12 @@ pub struct KnownPeer {
     pub ping: Option<i64>,
 }
 
+impl KnownPeer {
+    pub fn accessible(&self) -> bool {
+        self.ping.is_some()
+    }
+}
+
 pub struct State {
     pub known_peers: Vec<KnownPeer>,
     pub local_fs_info: LocalFSInfo,

@@ -13,7 +13,6 @@ struct Args {
     path: String,
 }
 
-
 #[tokio::main]
 async fn main() {
     let args: Args = Args::parse();

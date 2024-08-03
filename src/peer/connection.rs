@@ -1,4 +1,5 @@
 use std::time::Duration;
+use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 // todo: cbor serialization still produces 31Kb size for the frame with 16Kb of contents. 
 // Maybe check some other available formats, or write own binary protocol?
@@ -107,6 +108,12 @@ impl Connection {
                 None
             },
         }
+    }
+
+    pub async fn from_addresses(addresses: Vec<String>) -> Vec<Option<Connection>> {
+        join_all(addresses.iter().map(|addr| async move {
+            Connection::from_address(&addr.clone()).await
+        })).await
     }
 
     pub async fn from_stream(stream: TcpStream) -> Self {
