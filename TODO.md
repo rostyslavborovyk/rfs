@@ -3,6 +3,11 @@
 - Finish the 'Known peers' panel
 - Refactor todos, improve project structure, enable linters
 - Improve UI appearance
+- Add a mode to: 
+  - Manually set local address
+  - Automatically set local Wi-Fi address
+  - Automatically set public internet address
+- Add an ability to automatically discover peers in local Wi-Fi network
 
 ## In progress
 
