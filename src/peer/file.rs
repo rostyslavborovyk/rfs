@@ -162,7 +162,7 @@ impl FileManager {
 
         let peers = file.data.peers.clone();
 
-        let connections: Vec<Option<Connection>> = Connection::from_addresses(peers).await;
+        let connections: Vec<Result<Connection, String>> = Connection::from_addresses(peers).await;
 
         let connections = join_all(connections.into_iter().flatten().map(|mut c| async {
             if let Err(e) = c.retrieve_info().await {

@@ -8,6 +8,7 @@
   - Automatically set local Wi-Fi address
   - Automatically set public internet address
 - Add an ability to automatically discover peers in local Wi-Fi network
+- Use thiserror crate
 
 ## In progress
 

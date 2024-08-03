@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use serde_cbor::{from_slice, to_vec};
 use crate::peer::connection::{ConnectionFrame, ConnectionInfo, GetInfoFrame};
-use crate::peer::enums::ConnectionState;
+use crate::peer::enums::ConnectionStatus;
 use crate::values::DEFAULT_BUFFER_SIZE;
 
 pub enum ConnectionError {
@@ -13,7 +13,7 @@ pub enum ConnectionError {
 
 pub struct Connection {
     stream: TcpStream,
-    state: ConnectionState,
+    state: ConnectionStatus,
     pub info: Option<ConnectionInfo>,
     buffer: [u8; DEFAULT_BUFFER_SIZE],
 }
@@ -26,7 +26,7 @@ impl Connection {
                 Some(
                     Connection {
                         stream,
-                        state: ConnectionState::Connected,
+                        state: ConnectionStatus::Connected,
                         buffer: [0; DEFAULT_BUFFER_SIZE],
                         info: None,
                     }
