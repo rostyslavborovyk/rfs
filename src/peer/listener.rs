@@ -4,38 +4,6 @@ use crate::peer::connection::{Connection, ConnectionFrame, FilePieceResponseFram
 use crate::peer::state::{KnownPeer, SharableStateContainer};
 use crate::values::SYNC_DELAY_SECS;
 
-pub struct PeerListener<'a> {
-    address: &'a str,
-    sharable_state_container: &'a mut SharableStateContainer,
-}
-
-impl<'a> PeerListener<'a> {
-    pub fn new(address: &'a str, sharable_state_container: &'a mut SharableStateContainer) -> Self {
-        Self {
-            address,
-            sharable_state_container,
-        }
-    }
-
-    pub async fn serve(&mut self) -> ! {
-        println!("Serving listener with address {}", self.address);
-        let listener = TcpListener::bind(self.address).await.unwrap();
-        loop {
-            println!("Waiting for new connection...");
-            let (socket, addr) = listener.accept().await.unwrap();
-            println!("Accepted new connection from addr {addr}");
-            let mut connection = Connection::from_stream(socket).await;
-            let mut sharable_state_container = self.sharable_state_container.clone();
-            tokio::spawn(async move {
-                process_inbound_connection(&mut connection, &mut sharable_state_container)
-                    .await.map_err(|err| {
-                    println!("Error when processing inbound connection: {err}");
-                });
-            });
-        };
-    }
-}
-
 async fn process_get_ping_frame(
     connection: &mut Connection,
     _: &mut SharableStateContainer,
@@ -111,6 +79,27 @@ async fn process_inbound_connection(
     };
 }
 
+pub async fn serve_listener(
+    addr: String,
+    sharable_state_container: &mut SharableStateContainer,
+) {
+    println!("Serving listener with address {addr}");
+    let listener = TcpListener::bind(addr).await.unwrap();
+    loop {
+        println!("Waiting for new connection...");
+        let (socket, addr) = listener.accept().await.unwrap();
+        println!("Accepted new connection from addr {addr}");
+        let mut connection = Connection::from_stream(socket).await;
+        let mut sharable_state_container = sharable_state_container.clone();
+        tokio::spawn(async move {
+            process_inbound_connection(&mut connection, &mut sharable_state_container)
+                .await.map_err(|err| {
+                    println!("Error when processing inbound connection: {err}");
+                });
+        });
+    };
+}
+
 pub async fn refresh_pings_for_peers(
     sharable_state_container: &mut SharableStateContainer,
 ) {
@@ -123,7 +112,7 @@ pub async fn refresh_pings_for_peers(
         let mut values = vec![];
         for peer in known_peers {
             let connection = Connection::from_address(&peer.address).await;
-            if connection.is_err() {
+            if let None = connection {
                 continue
             }
             let mut connection = connection.unwrap();
@@ -132,7 +121,7 @@ pub async fn refresh_pings_for_peers(
                 Ok(v) => v,
                 Err(err) => {
                     println!("Error when getting ping from the client: {err}");
-                    continue;
+                    continue
                 }
             };
             values.push(KnownPeer {

@@ -16,7 +16,6 @@ tokio-test = "0.4.4"
 serde_cbor = "0.11.2"
 eframe = "0.28.1"
 tinyfiledialogs = "3.9.1"
-bytes = "1.7.1"
 
 [[bin]]
 name = "serve_peer"

@@ -8,9 +8,7 @@ use distributed_fs::peer::state::State;
 
 
 #[tokio::main]
-async fn main() -> Result<(), String> {
-    let start = tokio::time::Instant::now();
-    
+async fn main() {
     let fs_config = FSConfig::new(None);
     check_folders(&fs_config);
     
@@ -20,24 +18,13 @@ async fn main() -> Result<(), String> {
     
     client.load_state("127.0.0.1:8000".to_string(), &fs_config).await.unwrap();
 
-    let file_id = "4148f04f-41e3-4f39-94e8-155bc6dcd3ae".to_string();
+    let file_id = "ab4a916c-f6b2-4814-b056-d364d4019098".to_string();
+    let piece = 0;
 
     let mut connection = Connection::from_address(&"127.0.0.1:8001".to_string()).await.unwrap();
-    for piece in 0..2 {
-        connection.write_frame(ConnectionFrame::GetFilePiece(GetFilePieceFrame { file_id: file_id.clone(), piece })).await;
-    }
+    connection.write_frame(ConnectionFrame::GetFilePiece(GetFilePieceFrame { file_id, piece })).await;
 
-    for _ in 0..2 {
-        let frame = connection.read_frame().await?;
-        match frame {
-            ConnectionFrame::FilePieceResponse(frame) => {
-                println!("Received file piece frame {}", frame.piece);
-            }
-            _ => {}
-        }
-    }
+    let frame = connection.read_frame().await.unwrap();
     
-    println!("Time spent: {}ms", start.elapsed().as_millis());
-
-    Ok(())
+    println!("Received frame {:?}", frame)
 }

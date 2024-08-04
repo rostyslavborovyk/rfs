@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use distributed_fs::peer::client::Client;
-use distributed_fs::peer::listener::{PeerListener, refresh_pings_for_peers};
+use distributed_fs::peer::listener::{refresh_pings_for_peers, serve_listener};
 use distributed_fs::peer::state::State;
 
 use clap::Parser;
@@ -41,8 +41,8 @@ async fn main() {
         refresh_pings_for_peers(&mut c).await;
     });
 
-    let mut c = sharable_state_container.clone();
-
-    let mut listener = PeerListener::new(&address, &mut c);
-    listener.serve().await;
+    serve_listener(
+        address,
+        &mut sharable_state_container.clone(),
+    ).await
 }

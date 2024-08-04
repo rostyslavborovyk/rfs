@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(PartialEq)]
-pub enum ConnectionStatus {
+pub enum ConnectionState {
     Connected,
     InfoRetrieved,
 }

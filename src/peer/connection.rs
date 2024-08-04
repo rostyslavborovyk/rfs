@@ -1,5 +1,4 @@
 use std::time::Duration;
-use bytes::BytesMut;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 // todo: cbor serialization still produces 31Kb size for the frame with 16Kb of contents. 
@@ -8,7 +7,7 @@ use serde_cbor::{from_slice, to_vec};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::{Instant, sleep};
-use crate::peer::enums::ConnectionStatus;
+use crate::peer::enums::ConnectionState;
 use crate::peer::state::KnownPeer;
 use crate::values::DEFAULT_BUFFER_SIZE;
 
@@ -88,27 +87,30 @@ pub struct ConnectionInfo {
 // define different methods for outbound peer connections and inbound connections
 pub struct Connection {
     stream: TcpStream,
-    status: ConnectionStatus,
+    state: ConnectionState,
     pub info: Option<ConnectionInfo>,
-    buffer: BytesMut,
+    buffer: [u8; DEFAULT_BUFFER_SIZE],
 }
 
 impl Connection {
-    pub async fn from_address(address: &String) -> Result<Self, String> {
+    pub async fn from_address(address: &String) -> Option<Self> {
         match TcpStream::connect(address).await {
-            Ok(stream) => 
-                Ok(Connection {
+            Ok(stream) => Some(
+                Connection {
                     stream,
-                    status: ConnectionStatus::Connected,
-                    buffer: BytesMut::with_capacity(DEFAULT_BUFFER_SIZE),
+                    state: ConnectionState::Connected,
+                    buffer: [0; DEFAULT_BUFFER_SIZE],
                     info: None,
-                })
-            ,
-            Err(err) => Err(err.to_string()),
+                }
+            ),
+            Err(err) => { 
+                println!("Exception when connecting to the address {}: {}", address, err);
+                None
+            },
         }
     }
 
-    pub async fn from_addresses(addresses: Vec<String>) -> Vec<Result<Connection, String>> {
+    pub async fn from_addresses(addresses: Vec<String>) -> Vec<Option<Connection>> {
         join_all(addresses.iter().map(|addr| async move {
             Connection::from_address(&addr.clone()).await
         })).await
@@ -117,8 +119,8 @@ impl Connection {
     pub async fn from_stream(stream: TcpStream) -> Self {
         Connection {
             stream,
-            status: ConnectionStatus::Connected,
-            buffer: BytesMut::with_capacity(DEFAULT_BUFFER_SIZE),
+            state: ConnectionState::Connected,
+            buffer: [0; DEFAULT_BUFFER_SIZE],
             info: None,
         }
     }
@@ -159,7 +161,7 @@ impl Connection {
     }
 
     pub async fn retrieve_info(&mut self) -> Result<(), String> {
-        if self.status != ConnectionStatus::Connected {
+        if self.state != ConnectionState::Connected {
             return Err("Failed to retrieve info, connection is not in connected state!".to_string());
         }
 
@@ -174,7 +176,7 @@ impl Connection {
 
         let ping = self.get_ping().await?;
 
-        self.status = ConnectionStatus::InfoRetrieved;
+        self.state = ConnectionState::InfoRetrieved;
         self.info = Some(ConnectionInfo {
             ping: ping as i64,
             file_ids: info_response.file_ids,
