@@ -1,4 +1,3 @@
-use std::time::Duration;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 // todo: cbor serialization still produces 31Kb size for the frame with 16Kb of contents. 
@@ -128,7 +127,18 @@ impl Connection {
     // todo: connection may return more bytes than buffer can load. To rewrite it with an ability
     // for the buffer to store loaded bytes and read from stream again.
     pub async fn read_frame(&mut self) -> Result<ConnectionFrame, String> {
-        let n_bytes = match self.stream.read(&mut self.buffer).await {
+        let size = match self.stream.read_u64().await {
+            Ok(v) => Ok(v),
+            Err(_) => Err("No bytes received from connection, closing".to_string())
+        }?;
+        
+        if size >= DEFAULT_BUFFER_SIZE as u64 {
+            return Err("Frame doesn't fit into the buffer".to_string())
+        };
+
+        let frame_buffer = &mut self.buffer[..size as usize];
+
+        let _ = match self.stream.read(frame_buffer).await {
             Ok(0) => {
                 Err("No bytes received from connection, closing".to_string())
             }
@@ -138,12 +148,16 @@ impl Connection {
             }
         }?;
 
-        from_slice(&self.buffer[..n_bytes]).map_err(|err| format!("Error when parsing frame {err}"))
+        from_slice(&frame_buffer).map_err(|err| format!("Error when parsing frame {err}"))
     }
 
     pub async fn write_frame(&mut self, frame: ConnectionFrame) {
-        let data = to_vec(&frame).expect("Failed to serialize GetInfo frame!");
-        println!("Writing frame with size {}", data.len());
+        let frame_data = to_vec(&frame).expect("Failed to serialize GetInfo frame!");
+        let frame_size: [u8; 8] = (frame_data.len() as u64).to_be_bytes();
+        let mut data = Vec::with_capacity(4 + frame_data.len());
+        data.extend_from_slice(frame_size.as_ref());
+        data.extend_from_slice(frame_data.as_ref());
+        println!("Writing frame with size {}", frame_data.len());
         self.stream.write_all(data.as_ref()).await.expect("Failed to send GetInfo frame to the peer");
     }
 
@@ -190,10 +204,6 @@ impl Connection {
     // channel to return the result to
     pub async fn get_file_piece(&mut self, file_id: String, piece: u64) -> Result<FilePieceResponseFrame, String> {
         self.write_frame(ConnectionFrame::GetFilePiece(GetFilePieceFrame { file_id, piece })).await;
-        
-        // todo: this sleep is required, because apparently, to quick write between sockets messes up the 
-        // data. To resolve it later
-        sleep(Duration::from_millis(10)).await;
 
         loop {
             let res: Option<FilePieceResponseFrame> = match self.read_frame().await? {

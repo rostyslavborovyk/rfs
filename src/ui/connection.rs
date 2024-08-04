@@ -41,6 +41,19 @@ impl Connection {
 
     pub fn read_frame(&mut self) -> Result<ConnectionFrame, ConnectionError> {
         ConnectionError::Generic("".to_string());
+        
+        let size_buffer = &mut self.buffer[..8];
+        match self.stream.read_exact(size_buffer) {
+            Ok(v) => Ok(v),
+            Err(_) => Err(ConnectionError::Generic("No bytes received from connection, closing".to_string()))
+        }?;
+        
+        let size = u64::from_be_bytes(size_buffer.try_into().unwrap());
+        
+        if size >= DEFAULT_BUFFER_SIZE as u64 {
+            return Err(ConnectionError::Generic("Frame doesn't fit into buffer".to_string()))
+        };
+
         let n_bytes = match self.stream.read(&mut self.buffer) {
             Ok(0) => {
                 Err(ConnectionError::Generic("No bytes received from connection, closing".to_string()))
@@ -59,8 +72,12 @@ impl Connection {
     }
 
     pub fn write_frame(&mut self, frame: ConnectionFrame) {
-        let data = to_vec(&frame).expect("Failed to serialize GetInfo frame!");
-        println!("Writing frame with size {}", data.len());
+        let frame_data = to_vec(&frame).expect("Failed to serialize GetInfo frame!");
+        let frame_size: [u8; 8] = (frame_data.len() as u64).to_be_bytes();
+        let mut data = Vec::with_capacity(4 + frame_data.len());
+        data.extend_from_slice(frame_size.as_ref());
+        data.extend_from_slice(frame_data.as_ref());
+        println!("Writing frame with size {}", frame_data.len());
         self.stream.write_all(data.as_ref()).expect("Failed to send GetInfo frame to the peer");
     }
 
