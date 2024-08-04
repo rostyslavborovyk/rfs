@@ -1,21 +1,22 @@
 use std::cell::RefCell;
 use std::{fs, thread};
+use std::collections::HashMap;
 use std::ops::Deref;
 use std::process::Command;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::time::{Duration, Instant};
-use eframe::egui;
-use eframe::egui::Color32;
+use std::time::{Duration};
+use eframe::{egui};
+use eframe::egui::{Color32, Rounding, Stroke, vec2};
 use eframe::emath::{Align};
 use tinyfiledialogs as tfd;
 use crate::domain::config::FSConfig;
-use crate::domain::files::{generate_meta_file, refresh_file_status};
+use crate::domain::enums::PieceDownloadStatus;
+use crate::domain::files::{generate_meta_file, refresh_file_status, RFSFile};
 use crate::domain::fs::check_folders;
-use crate::peer::connection::{ConnectionFrame, GetFileFrame, GetInfoFrame, InfoResponseFrame};
+use crate::peer::connection::{ConnectionFrame, FilePieceDownloadStatusResponseFrame, GetFileFrame, GetInfoFrame, InfoResponseFrame};
 use crate::peer::enums::FileStatus;
-use crate::peer::file::RFSFile;
-use crate::peer::state::KnownPeer;
-use crate::ui::connection::Connection;
+use crate::peer::state::{FileDownloadProgress, KnownPeer, PieceDownloadProgress};
+use crate::ui::connection::{Connection};
 use crate::ui::enums::LeftPanelView;
 use crate::ui::format::to_readable_size;
 use crate::values::{LOCAL_PEER_ADDRESS, SYNC_DELAY_SECS};
@@ -32,6 +33,7 @@ pub struct AppState {
     left_panel_view_selected: LeftPanelView,
     rfs_files: Vec<RFSFile>,
     known_peers: Vec<KnownPeer>,
+    file_download_progresses: HashMap<String, FileDownloadProgress>
 }
 
 // todo: change heap strings to str refs with lifetime
@@ -72,13 +74,15 @@ pub enum SyncChannelEvent {
 }
 
 #[derive(Debug)]
-pub enum EventChannelEvent {
-    PeersInfoUpdate(InfoResponseFrame)
+pub struct DownloadFileCommandPayload {
+    file_id: String,
 }
 
 #[derive(Debug)]
-pub struct DownloadFileCommandPayload {
-    file_id: String,
+pub enum EventChannelEvent {
+    PeersInfoUpdate(InfoResponseFrame),
+    FilePieceDownloadStatus(FilePieceDownloadStatusResponseFrame),
+    FileDownloadStarted(DownloadFileCommandPayload)
 }
 
 #[derive(Debug)]
@@ -113,19 +117,26 @@ fn run_background_worker(
                 }
                 CommandChannelEvent::DownloadFile(payload) => {
                     let file_id = payload.file_id;
-                    connection.write_frame(ConnectionFrame::GetFile(GetFileFrame { file_id }));
+                    connection.write_frame(ConnectionFrame::GetFile(GetFileFrame { file_id: file_id.clone() }));
+                    event_tx.send(EventChannelEvent::FileDownloadStarted(DownloadFileCommandPayload {file_id})).unwrap()
                 }
             }
         }
-        if let Ok(response) = connection.read_frame() {
-            match response {
-                ConnectionFrame::InfoResponse(frame) => {
-                    event_tx.send(EventChannelEvent::PeersInfoUpdate(frame)).unwrap()
+        match connection.read_frame() {
+            Ok(response) => {
+                match response {
+                    ConnectionFrame::InfoResponse(frame) => {
+                        event_tx.send(EventChannelEvent::PeersInfoUpdate(frame)).unwrap()
+                    }
+                    ConnectionFrame::FilePieceDownloadStatusResponse(frame) => {
+                        event_tx.send(EventChannelEvent::FilePieceDownloadStatus(frame)).unwrap()
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
+            Err(_) => {}
         }
-        thread::sleep(Duration::from_millis(50));
+        thread::sleep(Duration::from_millis(20));
     }
 }
 
@@ -202,15 +213,30 @@ impl RFSApp {
                     self.state.left_panel_view_selected = LeftPanelView::KnownPeers;
                 };
             });
+
             match self.state.left_panel_view_selected {
                 LeftPanelView::Files => {
                     ui.with_layout(egui::Layout::top_down(Align::Center), |ui| {
-                        for file in self.state.rfs_files.iter() {
+                        for (i, file) in self.state.rfs_files.iter().enumerate() {
                             self.render_file(ui, file);
+                            if i + 1 != self.state.rfs_files.len() {
+                                ui.add_space(1.);
+                                ui.separator();
+                            };
                         }
                     });
                 }
-                LeftPanelView::KnownPeers => {}
+                LeftPanelView::KnownPeers => {
+                    ui.with_layout(egui::Layout::top_down(Align::Center), |ui| {
+                        for (i, kp) in self.state.known_peers.iter().enumerate() {
+                            self.render_known_peer(ui, kp);
+                            if i + 1 != self.state.known_peers.len() {
+                                ui.add_space(1.);
+                                ui.separator();
+                            };
+                        }
+                    });
+                }
             }
         });
     }
@@ -248,8 +274,6 @@ impl RFSApp {
         ctx.request_repaint();
         
         if let Ok(v) = self.channels.sync_rx.try_recv() {
-            let start = Instant::now();
-            
             match v {
                 SyncChannelEvent::RecalculatePings => {
                     self.channels.command_tx.send(CommandChannelEvent::GetPeersInfo).unwrap();
@@ -260,30 +284,59 @@ impl RFSApp {
                     }
                 }
             }
-            println!("Time spent for syncing {:?}: {}μ", v, start.elapsed().as_micros())
         }
 
         if let Ok(v) = self.channels.event_rx.try_recv() {
-            let start = Instant::now();
-
             match v {
                 EventChannelEvent::PeersInfoUpdate(frame) => {
                     self.state.known_peers = frame.known_peers;
                 }
+                EventChannelEvent::FilePieceDownloadStatus(frame) => {
+                    let download_info = match self.state.file_download_progresses.get_mut(&frame.file_id) {
+                        None => panic!("File is not in the system!"),
+                        Some(v) => v,
+                    };
+                    
+                    download_info.pieces[frame.piece as usize] = PieceDownloadProgress {
+                        piece: frame.piece,
+                        status: frame.status,
+                    };
+                }
+                EventChannelEvent::FileDownloadStarted(payload) => {
+                    println!("File download event handling!");
+                    let pieces: u64;
+                    {
+                        let file = self.get_file_by_id_mut(&payload.file_id).unwrap();
+                        file.status = Some(FileStatus::Downloading);
+                        pieces = file.data.hashes.len() as u64;
+                    }
+                    self.state.file_download_progresses.insert(
+                        payload.file_id.clone(),
+                        FileDownloadProgress::empty(pieces),
+                    );
+                }
             }
-            println!("Time spent for syncing events: {}μ",  start.elapsed().as_micros())
         }
     }
 
     fn get_selected_file(&self) -> Option<RFSFile> {
         match self.state.file_id_selected.borrow().deref() {
             None => None,
-            Some(file_id) => {
-                match self.state.rfs_files.iter().find(|f| f.data.id.eq(file_id)) {
-                    None => None,
-                    Some(f) => Some(f.clone())
-                }
-            }
+            Some(file_id) => self.get_file_by_id(file_id)
+        }
+    }
+
+    fn get_file_by_id(&self, file_id: &String) -> Option<RFSFile> {
+        match self.state.rfs_files.iter().find(|f| f.data.id.eq(file_id)) {
+            None => None,
+            Some(f) => Some(f.clone())
+        }
+    }
+    
+    fn get_file_by_id_mut(&mut self, file_id: &String) -> Option<&mut RFSFile> {
+        match self.state.rfs_files.iter_mut().find(|f| f.data.id.eq(file_id)) {
+            None => None,
+            Some(f) => Some(f)
         }
     }
 
@@ -328,7 +381,37 @@ impl RFSApp {
                         "Not verified"
                     };
                     self.render_info_panel_field(ui, "Downloaded", downloaded_status, 0.);
+                    if file.status == Some(FileStatus::Downloading) {
+                        self.render_downloading_progress(ui, &file);
+                    }
                 }
+            }
+        });
+    }
+    
+    fn render_downloading_progress(&mut self, ui: &mut egui::Ui, file: &RFSFile) {
+        ui.with_layout(egui::Layout::left_to_right(Align::TOP), |ui| {
+            let btn_width = (ui.available_width() - 105.) / file.data.hashes.len() as f32;
+            ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+            let file_info = match self.state.file_download_progresses.get(&file.data.id) {
+                None => return,
+                Some(v) => v
+            };
+            
+            for i in 0..file.data.hashes.len() {
+                let piece_info: PieceDownloadProgress = file_info.pieces[i].clone();
+                let mut btn = egui::Button::new("").rounding(Rounding::ZERO).stroke(Stroke::NONE);
+                match piece_info.status {
+                    PieceDownloadStatus::NotDownloaded => {}
+                    PieceDownloadStatus::Downloading => {
+                        btn = btn.fill(INFO);
+                    }
+                    PieceDownloadStatus::Downloaded => {
+                        btn = btn.fill(SUCCESS);
+                    }
+                }
+                
+                ui.add_sized([btn_width, 0.0], btn);
             }
         });
     }
@@ -417,23 +500,36 @@ impl RFSApp {
                                                 file_id: file.data.id.clone()
                                             }
                                         );
-                                        self.channels.command_tx.send(command).unwrap()
+                                        self.channels.command_tx.send(command).unwrap();
                                     }
                                 } else {
                                     ui.add_sized([30., 0.0], egui::Button::new("⬇").fill(WARNING)).clicked();
                                 }
                             }
-                            _ => {}
+                            FileStatus::Downloading => {
+                                ui.add_sized([30., 0.0], egui::Button::new("⬇").fill(INFO));
+                            }
                         }
                     }
                 }
             });
         });
-        ui.add_space(1.);
-        ui.separator();
+    }
+
+    fn render_known_peer(&self, ui: &mut egui::Ui, known_peer: &KnownPeer) {
+        ui.horizontal(|ui| {
+            let ping = if let Some(p) = known_peer.ping {
+                p.to_string()
+            } else {
+                "Not accessible".to_string()
+            };
+            ui.label(format!("{}", known_peer.address));
+            ui.with_layout(egui::Layout::right_to_left(Align::TOP), |ui| {
+                ui.label(format!("{}", ping));
+            })
+        });
     }
 }
-
 
 fn render_footer(ctx: &egui::Context) {
     egui::TopBottomPanel::bottom("footer").show(ctx, |ui| {

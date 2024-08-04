@@ -1,60 +1,14 @@
 use std::collections::HashMap;
 use tokio::fs;
 use futures::future::join_all;
-use serde::{Deserialize, Serialize};
 use tokio;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 use crate::domain::config::FSConfig;
-use crate::domain::models::File;
+use crate::domain::enums::PieceDownloadStatus;
+use crate::domain::files::RFSFile;
 use crate::peer::connection::{Connection, FilePieceResponseFrame};
-use crate::peer::enums::FileStatus;
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct RFSFile {
-    pub data: File,
-    pub status: Option<FileStatus>,
-}
-
-impl RFSFile {
-    pub fn from_path_sync(path: &str) -> Self {
-        let contents = std::fs::read(path).unwrap();
-        let data: File = serde_json::from_slice(contents.as_slice()).unwrap();
-        RFSFile {
-            data,
-            status: Default::default(),
-        }
-    }
-    
-    pub async fn from_path(path: &str) -> Self {
-        let contents = tokio::fs::read(path).await.unwrap();
-        let data: File = serde_json::from_slice(contents.as_slice()).unwrap();
-        RFSFile {
-            data,
-            status: Default::default(),
-        }
-    }
-
-    pub async fn save_to_project_dir(&self) -> Result<(), String>{
-        let path = String::from("meta_files/") 
-            + &self.data.name.split('.').next()
-            .ok_or("Failed to parse the file name, should be in format {name}.{extension}!")? 
-            + ".rfs";
-        let contents = serde_json::to_string(&self.data).unwrap();
-        tokio::fs::write(path, contents).await.unwrap();
-        Ok(())
-    }
-
-    pub fn save(&self, path: String) -> Result<(), String>{
-        let contents = serde_json::to_string(&self.data).unwrap();
-        std::fs::write(path, contents).unwrap();
-        Ok(())
-    }
-
-    pub fn get_path(&self) -> String {
-        "files/".to_string() + &self.data.name
-    }
-}
+use crate::peer::connection::ConnectionFrame::FilePieceDownloadStatusResponse;
 
 pub struct FileManager {
     files: HashMap<String, RFSFile>,
@@ -157,7 +111,7 @@ impl FileManager {
         Ok(())
     }
 
-    pub async fn download_file(&self, file_id: String) -> Result<(), String> {
+    pub async fn download_file(&self, ui_connection: &mut Connection, file_id: String) -> Result<(), String> {
         let file = self.files.get(&file_id).ok_or("No file with such name")?;
 
         let peers = file.data.peers.clone();
@@ -184,10 +138,19 @@ impl FileManager {
         let mut piece_ids = vec![];
         for (pieces, mut c) in assigned_pieces.iter().zip(connections) {
             for piece in pieces {
+                ui_connection.send_file_piece_download_status(
+                    file_id.clone(), piece.to_owned(), PieceDownloadStatus::Downloading,
+                ).await;
+                println!("Written downloading frame to {file_id}");
                 let frame = c.get_file_piece(file_id.clone(), piece.to_owned()).await?;
                 // todo: check piece hash before saving
                 piece_ids.push(frame.get_piece_id());
                 self.save_file_piece(frame).await?;
+
+                ui_connection.send_file_piece_download_status(
+                    file_id.clone(), piece.to_owned(), PieceDownloadStatus::Downloaded,
+                ).await;
+                println!("Written downloaded frame to {file_id}");
             }
         };
 

@@ -6,6 +6,7 @@ use crate::peer::connection::{ConnectionFrame, ConnectionInfo, GetInfoFrame};
 use crate::peer::enums::ConnectionState;
 use crate::values::DEFAULT_BUFFER_SIZE;
 
+#[derive(Debug)]
 pub enum ConnectionError {
     WouldBlock,
     Generic(String)
@@ -45,7 +46,7 @@ impl Connection {
         let size_buffer = &mut self.buffer[..8];
         match self.stream.read_exact(size_buffer) {
             Ok(v) => Ok(v),
-            Err(_) => Err(ConnectionError::Generic("No bytes received from connection, closing".to_string()))
+            Err(_) => Err(ConnectionError::Generic("Can't read size bytes".to_string()))
         }?;
         
         let size = u64::from_be_bytes(size_buffer.try_into().unwrap());
@@ -54,7 +55,9 @@ impl Connection {
             return Err(ConnectionError::Generic("Frame doesn't fit into buffer".to_string()))
         };
 
-        let n_bytes = match self.stream.read(&mut self.buffer) {
+        let frame_buffer = &mut self.buffer[..size as usize];
+
+        let _ = match self.stream.read(frame_buffer) {
             Ok(0) => {
                 Err(ConnectionError::Generic("No bytes received from connection, closing".to_string()))
             }
@@ -67,8 +70,11 @@ impl Connection {
             }
         }?;
 
-        from_slice(&self.buffer[..n_bytes])
-            .map_err(|err| ConnectionError::Generic(format!("Error when parsing frame {err}")))
+        from_slice(frame_buffer)
+            .map_err(|err| {
+                println!("Error when parsing frame");
+                ConnectionError::Generic(format!("Error when parsing frame {err}"))
+            })
     }
 
     pub fn write_frame(&mut self, frame: ConnectionFrame) {

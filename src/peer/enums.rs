@@ -6,7 +6,7 @@ pub enum ConnectionState {
     InfoRetrieved,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum FileStatus {
     Downloaded,
     Downloading,

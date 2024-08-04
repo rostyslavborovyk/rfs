@@ -3,9 +3,37 @@ use serde::{Deserialize, Serialize};
 use crate::peer::client::{LocalFSInfo};
 use tokio::sync::{Mutex};
 use crate::domain::config::FSConfig;
+use crate::domain::enums::PieceDownloadStatus;
 use crate::peer::file::FileManager;
 
 pub type SharableStateContainer = Arc<Mutex<State>>;
+
+#[derive(Clone)]
+pub struct PieceDownloadProgress {
+    pub piece: u64,
+    pub status: PieceDownloadStatus,
+}
+
+impl PieceDownloadProgress {
+    pub fn empty(piece: u64) -> Self {
+        Self {
+            piece,
+            status: PieceDownloadStatus::NotDownloaded,
+        }
+    }
+}
+
+pub struct FileDownloadProgress {
+    pub pieces: Vec<PieceDownloadProgress>
+}
+
+impl FileDownloadProgress {
+    pub fn empty(pieces: u64) -> Self {
+        Self {
+            pieces: (0..pieces).map(|p| PieceDownloadProgress::empty(p)).collect(),
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct KnownPeer {

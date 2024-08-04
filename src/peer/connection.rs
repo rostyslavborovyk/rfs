@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_cbor::{from_slice, to_vec};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::time::{Instant, sleep};
+use tokio::time::{Instant};
+use crate::domain::enums::PieceDownloadStatus;
 use crate::peer::enums::ConnectionState;
 use crate::peer::state::KnownPeer;
 use crate::values::DEFAULT_BUFFER_SIZE;
@@ -31,7 +32,7 @@ pub struct GetFilePieceFrame {
     pub piece: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GetFileFrame {
     pub file_id: String,
 }
@@ -41,6 +42,13 @@ pub struct FilePieceResponseFrame {
     pub file_id: String,
     pub piece: u64,
     pub content: Vec<u8>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct FilePieceDownloadStatusResponseFrame {
+    pub file_id: String,
+    pub piece: u64,
+    pub status: PieceDownloadStatus,
 }
 
 impl FilePieceResponseFrame {
@@ -72,6 +80,9 @@ pub enum ConnectionFrame {
 
     #[serde(rename = "FilePieceResponse")]
     FilePieceResponse(FilePieceResponseFrame),
+
+    #[serde(rename = "FilePieceDownloadStatusResponse")]
+    FilePieceDownloadStatusResponse(FilePieceDownloadStatusResponseFrame),
 }
 
 #[derive(Debug)]
@@ -217,5 +228,13 @@ impl Connection {
                 return Ok(r)
             }
         }
+    }
+    
+    pub async fn send_file_piece_download_status(&mut self, file_id: String, piece: u64, status: PieceDownloadStatus) {
+        self.write_frame(ConnectionFrame::FilePieceDownloadStatusResponse(FilePieceDownloadStatusResponseFrame {
+            file_id,
+            piece,
+            status,
+        })).await;
     }
 }

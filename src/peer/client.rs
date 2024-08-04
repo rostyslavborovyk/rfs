@@ -1,9 +1,8 @@
 use std::collections::HashSet;
-use crate::peer::file::RFSFile;
 use crate::peer::state::{KnownPeer, SharableStateContainer};
 use tokio::fs;
 use crate::domain::config::FSConfig;
-use crate::domain::files::generate_meta_file;
+use crate::domain::files::{generate_meta_file, RFSFile};
 
 #[derive(Clone)]
 pub struct LocalFSInfo {}
@@ -59,12 +58,6 @@ pub async fn load_state(&mut self, own_address: String, fs_config: &FSConfig) ->
         }
         locked_state_container.known_peers =
             peers.into_iter().map(|address| KnownPeer { address, ping: None }).collect();
-        Ok(())
-    }
-
-    pub async fn download_file(&mut self, file_id: String) -> Result<(), String> {
-        let locked_state_container = self.state_container.lock().await;
-        locked_state_container.file_manager.download_file(file_id).await?;
         Ok(())
     }
 }

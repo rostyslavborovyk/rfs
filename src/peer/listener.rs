@@ -40,7 +40,7 @@ async fn process_get_file_piece_frame(
 }
 
 async fn process_get_file_frame(
-    _: &mut Connection,
+    connection: &mut Connection,
     container: &mut SharableStateContainer,
     frame: GetFileFrame,
 ) -> Result<(), String> {
@@ -48,7 +48,7 @@ async fn process_get_file_frame(
 
     let container_locked = container.lock().await;
     // todo: file download potentially long operation, should sync how to not block other connections
-    container_locked.file_manager.download_file(frame.file_id).await?;
+    container_locked.file_manager.download_file(connection, frame.file_id).await?;
 
     println!("Time spent for processing file download : {}ms", start.elapsed().as_millis());
     Ok(())
