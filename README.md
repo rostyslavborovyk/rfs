@@ -12,7 +12,7 @@ so every client in the system is equal.
 
 **Peer** - a client that can connect into the network.
 
-***.rfs file** (stands for rostyslav file system or rust file system) - a file that contains meta information about the state of the network at the time it was created. To get 
+***.rfs file** - a file that contains meta information about the state of the network at the time it was created. To get 
 the latest info, new peer should connect to one of the peers mentioned in the file, and retrieve latest actual info
 about state of the network. 
 If no peers mentioned in the file are accessible, the file gets invalidated.
@@ -31,11 +31,3 @@ Business logic component will handle all the logic described in taxonomy.
 UI will be built with one of the libraries (possibly https://www.egui.rs/). It should have 2 views. The first view
 represent the state of the system (represent the peers and possibly the ping values for them, some other info about the 
 peers). The second view should represent the view of downloaded files (akin to µtorrent)
-
-## UI
-1. Represent a list of metafiles present in the system with some info (name, size, downloaded or not, etc.)
-2. Each of the file items can be opened and the info about available peers(seeds) is shown to the users with some refresh interval
-
-### UI Wireframe
-https://excalidraw.com/#json=qQRuctZkgNcJfE6hOZb3a,qpcrJ17YkC2SLbDHhUGqEQ
-
